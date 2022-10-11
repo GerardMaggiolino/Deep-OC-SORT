@@ -37,6 +37,17 @@ def filter_targets(online_targets, aspect_ratio_thresh, min_box_area):
 
 
 def dti(txt_path, save_path, n_min=30, n_dti=20):
+    def dti_write_results(filename, results):
+        save_format = '{frame},{id},{x1},{y1},{w},{h},{s},-1,-1,-1\n'
+        with open(filename, 'w') as f:
+            for i in range(results.shape[0]):
+                frame_data = results[i]
+                frame_id = int(frame_data[0])
+                track_id = int(frame_data[1])
+                x1, y1, w, h = frame_data[2:6]
+                line = save_format.format(frame=frame_id, id=track_id, x1=x1, y1=y1, w=w, h=h, s=-1)
+                f.write(line)
+
     seq_txts = sorted(glob.glob(os.path.join(txt_path, "*.txt")))
     for seq_txt in seq_txts:
         seq_name = seq_txt.split("/")[-1]
@@ -85,4 +96,4 @@ def dti(txt_path, save_path, n_min=30, n_dti=20):
         save_seq_txt = os.path.join(save_path, seq_name)
         seq_results = seq_results[1:]
         seq_results = seq_results[seq_results[:, 0].argsort()]
-        write_results_no_score(save_seq_txt, seq_results)
+        dti_write_results(save_seq_txt, seq_results)

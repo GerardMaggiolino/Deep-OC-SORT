@@ -2,6 +2,8 @@ import pdb
 import os
 
 import torch
+import cv2
+import numpy as np
 
 import dataset
 import utils
@@ -11,7 +13,7 @@ from trackers import ocsort_tracker
 
 def get_main_args():
     parser = ocsort_tracker.args.make_parser()
-    parser.add_argument("--result_folder", type=str, default="results/trackers/mot17-val")
+    parser.add_argument("--result_folder", type=str, default="results/trackers/MOT17-val")
     parser.add_argument("--exp_name", type=str, default="exp1")
     parser.add_argument("--min_box_area", type=float, default=10, help="filter out tiny boxes")
     parser.add_argument(
@@ -29,7 +31,6 @@ def main():
     # Set up loader, detector, tracker
     args = get_main_args()
     loader = dataset.get_mot17_loader()
-    # TODO: enforce detector must put out x1y1x2y2 without resizing, in absolute cords
     detector = yolox.get_model("external/weights/bytetrack_ablation.pth.tar")
     tracker = ocsort_tracker.ocsort.OCSort(
         det_thresh=args.track_thresh,
@@ -41,7 +42,6 @@ def main():
     results = {}
 
     # See __getitem__ of dataset.MOTDataset
-    pdb.set_trace()
     for img, label, info, idx in loader:
         # Frame info
         frame_id = info[2].item()
@@ -63,9 +63,11 @@ def main():
         # Nx5 of (x1, y1, x2, y2, conf)
         with torch.no_grad():
             pred = detector(img.cuda())
+        # draw(info[4][0], pred.cpu().numpy(), args.tsize)
 
         # Nx5 of (x1, y1, x2, y2, ID)
         targets = tracker.update(pred, info, args.tsize)
+        # TODO: enforce detector must put out x1y1x2y2 without resizing, in absolute cords
         tlwhs, ids = utils.filter_targets(targets, args.aspect_ratio_thresh, args.min_box_area)
         results[video_name].append((frame_id, tlwhs, ids))
 
@@ -75,12 +77,20 @@ def main():
     for name, res in results.items():
         result_filename = os.path.join(folder, f"{name}.txt")
         utils.write_results_no_score(result_filename, res)
-        if args.post:
-            utils.dti(result_filename, result_filename)
-
     print(f"Finished, results saved to {folder}")
     if args.post:
+        utils.dti(folder, folder)
         print("Linear interpolation post-processing applied.")
+
+
+def draw(name, pred, shape):
+    name = os.path.join("data/mot/train", name)
+    img = cv2.imread(name)
+    img = cv2.resize(img, (shape[1], shape[0]))
+    for p in pred:
+        p = np.round(p).astype(np.int32)
+        cv2.rectangle(img, (p[0], p[1]), (p[2], p[3]), (255, 0, 0), 5)
+    cv2.imwrite("debug.png", img)
 
 
 if __name__ == "__main__":
