@@ -4,3 +4,6 @@
 [submodule "external/YOLOX"]
 	path = external/YOLOX
 	url = https://github.com/Megvii-BaseDetection/YOLOX.git
+[submodule "external/deep-person-reid"]
+	path = external/deep-person-reid
+	url = https://github.com/KaiyangZhou/deep-person-reid.git

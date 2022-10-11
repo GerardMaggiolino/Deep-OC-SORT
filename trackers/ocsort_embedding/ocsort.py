@@ -4,6 +4,11 @@
 from __future__ import print_function
 
 import pdb
+from collections import OrderedDict
+
+import torch
+import torchreid
+import torchvision
 
 import numpy as np
 from .association import *
@@ -63,7 +68,7 @@ class KalmanBoxTracker(object):
 
     count = 0
 
-    def __init__(self, bbox, delta_t=3, orig=False):
+    def __init__(self, bbox, delta_t=3, orig=False, emb=None):
         """
         Initialises a tracker using initial bounding box.
 
@@ -121,6 +126,7 @@ class KalmanBoxTracker(object):
         self.history_observations = []
         self.velocity = None
         self.delta_t = delta_t
+        self.emb = emb
 
     def update(self, bbox):
         """
@@ -156,6 +162,10 @@ class KalmanBoxTracker(object):
             self.kf.update(convert_bbox_to_z(bbox))
         else:
             self.kf.update(bbox)
+
+    def update_emb(self, emb, alpha=0.5):
+        self.emb = alpha * emb + (1 - alpha) * self.emb
+        self.emb = self.emb / (self.emb ** 2).sum()
 
     def predict(self):
         """
@@ -221,7 +231,47 @@ class OCSort(object):
         self.use_byte = use_byte
         KalmanBoxTracker.count = 0
 
-    def update(self, output_results, img_info, img_size):
+        model = torchreid.models.build_model(
+            name="osnet_ain_x1_0",
+            num_classes=2510,
+            loss="softmax",
+            pretrained=False
+        )
+        sd = torch.load("external/weights/osnet_ain_ms_d_c.pth.tar")["state_dict"]
+        new_state_dict = OrderedDict()
+        for k, v in sd.items():
+            name = k[7:]  # remove `module.`
+            new_state_dict[name] = v
+        # load params
+        model.load_state_dict(new_state_dict)
+        model.eval()
+        model.cuda()
+        self.model = model
+
+    def embedding(self, results, img):
+        results = np.round(results).astype(np.int32)
+        results[:, 0] = results[:, 0].clip(0, img.shape[3])
+        results[:, 1] = results[:, 1].clip(0, img.shape[2])
+        results[:, 2] = results[:, 2].clip(0, img.shape[3])
+        results[:, 3] = results[:, 3].clip(0, img.shape[2])
+
+        crops = []
+        for p in results:
+            crop = img[:, :, p[1]:p[3], p[0]:p[2]]
+            try:
+                crop = torchvision.transforms.functional.resize(crop, (256, 128))
+                crops.append(crop)
+            except:
+                print("noise")
+                crops.append(torch.randn(3, 256, 128).cuda())
+        crops = torch.cat(crops, dim=0)
+        with torch.no_grad():
+            embs = self.model(crops)
+
+        embs = torch.nn.functional.normalize(embs)
+        return embs
+
+    def update(self, output_results, img_info, img_size, img):
         """
         Params:
           dets - a numpy array of detections in the format [[x1,y1,x2,y2,score],[x1,y1,x2,y2,score],...]
@@ -234,6 +284,8 @@ class OCSort(object):
 
         if not isinstance(output_results, np.ndarray):
             output_results = output_results.cpu().numpy()
+
+        embs = self.embedding(output_results, img)
 
         self.frame_count += 1
         # post_process detections
@@ -276,7 +328,7 @@ class OCSort(object):
             First round of association
         """
         matched, unmatched_dets, unmatched_trks = associate(
-            dets, trks, self.iou_threshold, velocities, k_observations, self.inertia
+            dets, trks, self.iou_threshold, velocities, k_observations, self.inertia, emb_cost
         )
         for m in matched:
             self.trackers[m[1]].update(dets[m[0], :])

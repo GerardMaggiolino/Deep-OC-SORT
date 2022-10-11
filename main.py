@@ -8,11 +8,11 @@ import numpy as np
 import dataset
 import utils
 from external.adaptors import yolox
-from trackers import ocsort_tracker
+from trackers import ocsort_embedding as tracker_module
 
 
 def get_main_args():
-    parser = ocsort_tracker.args.make_parser()
+    parser = tracker_module.args.make_parser()
     parser.add_argument("--result_folder", type=str, default="results/trackers/MOT17-val")
     parser.add_argument("--exp_name", type=str, default="exp1")
     parser.add_argument("--min_box_area", type=float, default=10, help="filter out tiny boxes")
@@ -32,7 +32,7 @@ def main():
     args = get_main_args()
     loader = dataset.get_mot17_loader()
     detector = yolox.get_model("external/weights/bytetrack_ablation.pth.tar")
-    tracker = ocsort_tracker.ocsort.OCSort(
+    tracker = tracker_module.ocsort.OCSort(
         det_thresh=args.track_thresh,
         iou_threshold=args.iou_thresh,
         asso_func=args.asso,
@@ -44,6 +44,7 @@ def main():
     # See __getitem__ of dataset.MOTDataset
     for img, label, info, idx in loader:
         # Frame info
+        img = img.cuda()
         frame_id = info[2].item()
         video_name = info[4][0].split("/")[0]
         if video_name not in results:
@@ -52,7 +53,7 @@ def main():
         print(f"Processing {video_name}:{frame_id}\r", end="")
         if frame_id == 1:
             print(f"Initializing tracker for {video_name}")
-            tracker = ocsort_tracker.ocsort.OCSort(
+            tracker = tracker_module.ocsort.OCSort(
                 det_thresh=args.track_thresh,
                 iou_threshold=args.iou_thresh,
                 asso_func=args.asso,
@@ -62,12 +63,10 @@ def main():
 
         # Nx5 of (x1, y1, x2, y2, conf)
         with torch.no_grad():
-            pred = detector(img.cuda())
-        # draw(info[4][0], pred.cpu().numpy(), args.tsize)
+            pred = detector(img)
 
         # Nx5 of (x1, y1, x2, y2, ID)
-        targets = tracker.update(pred, info, args.tsize)
-        # TODO: enforce detector must put out x1y1x2y2 without resizing, in absolute cords
+        targets = tracker.update(pred, info, args.tsize, img)
         tlwhs, ids = utils.filter_targets(targets, args.aspect_ratio_thresh, args.min_box_area)
         results[video_name].append((frame_id, tlwhs, ids))
 
