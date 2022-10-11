@@ -64,8 +64,6 @@ def main():
         with torch.no_grad():
             pred = detector(img.cuda())
 
-        draw(info[4], pred.cpu().numpy())
-
         # Nx5 of (x1, y1, x2, y2, ID)
         targets = tracker.update(pred, info, args.tsize)
         tlwhs, ids = utils.filter_targets(targets, args.aspect_ratio_thresh, args.min_box_area)
@@ -83,10 +81,6 @@ def main():
     print(f"Finished, results saved to {folder}")
     if args.post:
         print("Linear interpolation post-processing applied.")
-
-
-
-def draw(name, pred):
 
 
 if __name__ == "__main__":
