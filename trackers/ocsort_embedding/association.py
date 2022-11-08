@@ -259,7 +259,7 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.3):
     return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
 
 
-def associate(detections, trackers, iou_threshold, velocities, previous_obs, vdc_weight, emb_cost):
+def associate(detections, trackers, iou_threshold, velocities, previous_obs, vdc_weight, emb_cost, w_assoc_emb):
     if len(trackers) == 0:
         return (
             np.empty((0, 2), dtype=int),
@@ -293,7 +293,10 @@ def associate(detections, trackers, iou_threshold, velocities, previous_obs, vdc
         if a.sum(1).max() == 1 and a.sum(0).max() == 1:
             matched_indices = np.stack(np.where(a), axis=1)
         else:
-            matched_indices = linear_assignment(-(iou_matrix + angle_diff_cost))
+            # final_cost = -(iou_matrix + angle_diff_cost + w_assoc_emb * emb_cost)
+            emb_cost[iou_matrix <= 0] = 0
+            final_cost = -(iou_matrix + angle_diff_cost + w_assoc_emb * emb_cost)
+            matched_indices = linear_assignment(final_cost)
     else:
         matched_indices = np.empty(shape=(0, 2))
 

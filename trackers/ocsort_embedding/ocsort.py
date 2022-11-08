@@ -4,14 +4,16 @@
 from __future__ import print_function
 
 import pdb
-from collections import OrderedDict
+import pickle
 
+import cv2
 import torch
-import torchreid
 import torchvision
 
 import numpy as np
 from .association import *
+from .embedding import EmbeddingComputer
+from .cmc import CMCComputer
 
 
 def k_previous_obs(observations, cur_age, k):
@@ -84,6 +86,7 @@ class KalmanBoxTracker(object):
             self.kf = KalmanFilter(dim_x=7, dim_z=4)
         self.kf.F = np.array(
             [
+               # x  y  s  r  x' y' r' 0
                 [1, 0, 0, 0, 1, 0, 0],
                 [0, 1, 0, 0, 0, 1, 0],
                 [0, 0, 1, 0, 0, 0, 1],
@@ -163,9 +166,22 @@ class KalmanBoxTracker(object):
         else:
             self.kf.update(bbox)
 
-    def update_emb(self, emb, alpha=0.5):
-        self.emb = alpha * emb + (1 - alpha) * self.emb
+    def update_emb(self, emb, alpha=0.9):
+        self.emb = alpha * self.emb + (1 - alpha) * emb
         self.emb = self.emb / (self.emb ** 2).sum()
+
+    def apply_affine_correction(self, affine):
+        # Correct last observation (used in OCR)
+        p_old = self.last_observation[:4].reshape(2, 2).T
+        m = affine[:, :2]
+        t = affine[:, 2].reshape(2, 1)
+        p_new = m @ p_old + t
+        self.last_observation[:2] = p_new[:, 0]
+        self.last_observation[2:4] = p_new[:, 1]
+
+        # TODO: Need to change for velocity
+        # Also need to change kf state, but might be frozen
+        self.kf.apply_affine_correction(m, t)
 
     def predict(self):
         """
@@ -214,7 +230,8 @@ class OCSort(object):
         delta_t=3,
         asso_func="iou",
         inertia=0.2,
-        use_byte=False,
+        w_association_emb=0.75,
+        alpha_fixed_emb=0.95
     ):
         """
         Sets key parameters for SORT
@@ -228,50 +245,14 @@ class OCSort(object):
         self.delta_t = delta_t
         self.asso_func = ASSO_FUNCS[asso_func]
         self.inertia = inertia
-        self.use_byte = use_byte
+        self.w_association_emb = w_association_emb
+        self.alpha_fixed_emb = alpha_fixed_emb
         KalmanBoxTracker.count = 0
 
-        model = torchreid.models.build_model(
-            name="osnet_ain_x1_0",
-            num_classes=2510,
-            loss="softmax",
-            pretrained=False
-        )
-        sd = torch.load("external/weights/osnet_ain_ms_d_c.pth.tar")["state_dict"]
-        new_state_dict = OrderedDict()
-        for k, v in sd.items():
-            name = k[7:]  # remove `module.`
-            new_state_dict[name] = v
-        # load params
-        model.load_state_dict(new_state_dict)
-        model.eval()
-        model.cuda()
-        self.model = model
+        self.embedder = EmbeddingComputer()
+        self.cmc = CMCComputer()
 
-    def embedding(self, results, img):
-        results = np.round(results).astype(np.int32)
-        results[:, 0] = results[:, 0].clip(0, img.shape[3])
-        results[:, 1] = results[:, 1].clip(0, img.shape[2])
-        results[:, 2] = results[:, 2].clip(0, img.shape[3])
-        results[:, 3] = results[:, 3].clip(0, img.shape[2])
-
-        crops = []
-        for p in results:
-            crop = img[:, :, p[1]:p[3], p[0]:p[2]]
-            try:
-                crop = torchvision.transforms.functional.resize(crop, (256, 128))
-                crops.append(crop)
-            except:
-                print("noise")
-                crops.append(torch.randn(3, 256, 128).cuda())
-        crops = torch.cat(crops, dim=0)
-        with torch.no_grad():
-            embs = self.model(crops)
-
-        embs = torch.nn.functional.normalize(embs)
-        return embs
-
-    def update(self, output_results, img_info, img_size, img):
+    def update(self, output_results, img, tag):
         """
         Params:
           dets - a numpy array of detections in the format [[x1,y1,x2,y2,score],[x1,y1,x2,y2,score],...]
@@ -281,14 +262,9 @@ class OCSort(object):
         """
         if output_results is None:
             return np.empty((0, 5))
-
         if not isinstance(output_results, np.ndarray):
             output_results = output_results.cpu().numpy()
-
-        embs = self.embedding(output_results, img)
-
         self.frame_count += 1
-        # post_process detections
         if output_results.shape[1] == 5:
             scores = output_results[:, 4]
             bboxes = output_results[:, :4]
@@ -296,19 +272,26 @@ class OCSort(object):
             output_results = output_results
             scores = output_results[:, 4] * output_results[:, 5]
             bboxes = output_results[:, :4]  # x1y1x2y2
-        img_h, img_w = img_info[0], img_info[1]
-        scale = min(img_size[0] / float(img_h), img_size[1] / float(img_w))
-        bboxes /= scale
+
+        # TODO: Make sure the img and bboxes are the same size scale
+        dets_embs = self.embedder.compute_embedding(img, bboxes, tag)
+        transform = self.cmc.compute_affine(img, bboxes, tag)
+        for trk in self.trackers:
+            trk.apply_affine_correction(transform)
+
         dets = np.concatenate((bboxes, np.expand_dims(scores, axis=-1)), axis=1)
-        inds_low = scores > 0.1
-        inds_high = scores < self.det_thresh
-        inds_second = np.logical_and(inds_low, inds_high)  # self.det_thresh > score > 0.1, for second matching
-        dets_second = dets[inds_second]  # detections for second matching
         remain_inds = scores > self.det_thresh
         dets = dets[remain_inds]
 
+        # Alpha for embeddings based on detector confidence model
+        dets_embs = dets_embs[remain_inds]
+        trust = (dets[:, 4] - self.det_thresh) / (1 - self.det_thresh)
+        af = self.alpha_fixed_emb
+        dets_alpha = af + (1 - af) * (1 - trust)
+
         # get predicted locations from existing trackers.
         trks = np.zeros((len(self.trackers), 5))
+        trk_embs = []
         to_del = []
         ret = []
         for t, trk in enumerate(trks):
@@ -316,7 +299,10 @@ class OCSort(object):
             trk[:] = [pos[0], pos[1], pos[2], pos[3], 0]
             if np.any(np.isnan(pos)):
                 to_del.append(t)
+            else:
+                trk_embs.append(self.trackers[t].emb)
         trks = np.ma.compress_rows(np.ma.masked_invalid(trks))
+        trk_embs = np.array(trk_embs)
         for t in reversed(to_del):
             self.trackers.pop(t)
 
@@ -327,40 +313,26 @@ class OCSort(object):
         """
             First round of association
         """
+        stage1_emb_cost = None if trk_embs.shape[0] == 0 else dets_embs @ trk_embs.T
         matched, unmatched_dets, unmatched_trks = associate(
-            dets, trks, self.iou_threshold, velocities, k_observations, self.inertia, emb_cost
+            dets, trks, self.iou_threshold, velocities, k_observations, self.inertia, stage1_emb_cost,
+            self.w_association_emb
         )
         for m in matched:
             self.trackers[m[1]].update(dets[m[0], :])
+            self.trackers[m[1]].update_emb(dets_embs[m[0]], alpha=dets_alpha[m[0]])
 
         """
             Second round of associaton by OCR
         """
-        # BYTE association
-        if self.use_byte and len(dets_second) > 0 and unmatched_trks.shape[0] > 0:
-            u_trks = trks[unmatched_trks]
-            iou_left = self.asso_func(dets_second, u_trks)  # iou between low score detections and unmatched tracks
-            iou_left = np.array(iou_left)
-            if iou_left.max() > self.iou_threshold:
-                """
-                NOTE: by using a lower threshold, e.g., self.iou_threshold - 0.1, you may
-                get a higher performance especially on MOT17/MOT20 datasets. But we keep it
-                uniform here for simplicity
-                """
-                matched_indices = linear_assignment(-iou_left)
-                to_remove_trk_indices = []
-                for m in matched_indices:
-                    det_ind, trk_ind = m[0], unmatched_trks[m[1]]
-                    if iou_left[m[0], m[1]] < self.iou_threshold:
-                        continue
-                    self.trackers[trk_ind].update(dets_second[det_ind, :])
-                    to_remove_trk_indices.append(trk_ind)
-                unmatched_trks = np.setdiff1d(unmatched_trks, np.array(to_remove_trk_indices))
-
         if unmatched_dets.shape[0] > 0 and unmatched_trks.shape[0] > 0:
             left_dets = dets[unmatched_dets]
+            left_dets_embs = dets_embs[unmatched_dets]
             left_trks = last_boxes[unmatched_trks]
+            left_trks_embs = trk_embs[unmatched_trks]
+
             iou_left = self.asso_func(left_dets, left_trks)
+            emb_cost_left = left_dets_embs @ left_trks_embs.T
             iou_left = np.array(iou_left)
             if iou_left.max() > self.iou_threshold:
                 """
@@ -368,7 +340,7 @@ class OCSort(object):
                 get a higher performance especially on MOT17/MOT20 datasets. But we keep it
                 uniform here for simplicity
                 """
-                rematched_indices = linear_assignment(-iou_left)
+                rematched_indices = linear_assignment(-(iou_left + emb_cost_left))
                 to_remove_det_indices = []
                 to_remove_trk_indices = []
                 for m in rematched_indices:
@@ -376,6 +348,7 @@ class OCSort(object):
                     if iou_left[m[0], m[1]] < self.iou_threshold:
                         continue
                     self.trackers[trk_ind].update(dets[det_ind, :])
+                    self.trackers[trk_ind].update_emb(dets_embs[det_ind], alpha=dets_alpha[det_ind])
                     to_remove_det_indices.append(det_ind)
                     to_remove_trk_indices.append(trk_ind)
                 unmatched_dets = np.setdiff1d(unmatched_dets, np.array(to_remove_det_indices))
@@ -386,7 +359,7 @@ class OCSort(object):
 
         # create and initialise new trackers for unmatched detections
         for i in unmatched_dets:
-            trk = KalmanBoxTracker(dets[i, :], delta_t=self.delta_t)
+            trk = KalmanBoxTracker(dets[i, :], delta_t=self.delta_t, emb=dets_embs[i])
             self.trackers.append(trk)
         i = len(self.trackers)
         for trk in reversed(self.trackers):

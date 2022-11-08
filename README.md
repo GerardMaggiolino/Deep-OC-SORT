@@ -22,14 +22,17 @@ and run `python3 data/tools/convert_mot17_to_coco.py`.
 
 ### Evaluation
 
-Run `python3 main.py --exp_name exp1`, which will evaluate on MOT17.
+Set `exp=exp1`
 
-To run TrackEval for HOTA, use: 
+Run `python3 main.py --exp_name $exp`, which will evaluate on MOT17, 
+and create results at `results/trackers/MOT17-val/$exp`.
+
+To run TrackEval for HOTA, on this new results, run: 
 ```bash
 python3 external/TrackEval/scripts/run_mot_challenge.py \
   --SPLIT_TO_EVAL val \
   --METRICS HOTA CLEAR Identity \
-  --TRACKERS_TO_EVAL exp1 \
+  --TRACKERS_TO_EVAL $exp \
   --GT_FOLDER results/gt/ \
   --TRACKERS_FOLDER results/trackers/
 ```

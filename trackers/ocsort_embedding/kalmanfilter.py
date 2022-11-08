@@ -96,6 +96,7 @@ Copyright 2014-2018 Roger R Labbe Jr.
 
 from __future__ import absolute_import, division
 
+import pdb
 from copy import deepcopy
 from math import log, exp, sqrt
 import sys
@@ -334,6 +335,7 @@ class KalmanFilterNew(object):
 
         self.attr_saved = None
         self.observed = False
+        self.last_measurement = None
 
     def predict(self, u=None, B=None, F=None, Q=None):
         """
@@ -382,6 +384,27 @@ class KalmanFilterNew(object):
         """
         self.attr_saved = deepcopy(self.__dict__)
 
+    def apply_affine_correction(self, m, t):
+        """
+        Apply to both last state and last observation for OOS smoothing.
+
+        Messy due to internal logic for kalman filter being messy.
+        """
+        # Handle frozen update
+        x = self.x if self.observed or self.attr_saved is None else self.attr_saved['x']
+
+        new_p = m @ x[:2] + t
+        new_v = m @ x[4:6]
+
+        if not self.observed and self.attr_saved is not None:
+            self.attr_saved['x'][:2] = new_p
+            self.attr_saved['x'][4:6] = new_v
+            p = self.attr_saved['last_measurement'][:2]
+            self.attr_saved['last_measurement'][:2] = m @ p + t
+
+        self.x[:2] = new_p
+        self.x[4:6] = new_v
+
     def unfreeze(self):
         if self.attr_saved is not None:
             new_history = deepcopy(self.history_obs)
@@ -392,7 +415,8 @@ class KalmanFilterNew(object):
             indices = np.where(np.array(occur) == 0)[0]
             index1 = indices[-2]
             index2 = indices[-1]
-            box1 = new_history[index1]
+            # box1 = new_history[index1]
+            box1 = self.last_measurement
             x1, y1, s1, r1 = box1
             w1 = np.sqrt(s1 * r1)
             h1 = np.sqrt(s1 / r1)
@@ -462,6 +486,7 @@ class KalmanFilterNew(object):
                 Got no observation so freeze the current parameters for future
                 potential online smoothing.
                 """
+                self.last_measurement = self.history_obs[-2]
                 self.freeze()
             self.observed = False
             self.z = np.array([[None] * self.dim_z]).T
