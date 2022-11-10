@@ -6,15 +6,23 @@ import numpy as np
 from pycocotools.coco import COCO
 
 
-def get_mot17_loader(
+def get_mot_loader(
+    dataset,
     batch_size=1,
     workers=4,
     data_dir="data",
     annotation="val_half.json",
     size=(800, 1440),
 ):
+    if dataset == "mot17":
+        direc = "mot"
+    elif dataset == "mot20":
+        direc = "MOT20"
+    else:
+        raise RuntimeError("Specify path here.")
+
     valdataset = MOTDataset(
-        data_dir=os.path.join(data_dir, "mot"),
+        data_dir=os.path.join(data_dir, direc),
         json_file=annotation,
         img_size=size,
         preproc=ValTransform(

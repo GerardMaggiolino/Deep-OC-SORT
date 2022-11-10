@@ -13,7 +13,8 @@ from trackers import ocsort_embedding as tracker_module
 
 def get_main_args():
     parser = tracker_module.args.make_parser()
-    parser.add_argument("--result_folder", type=str, default="results/trackers/MOT17-val")
+    parser.add_argument("--dataset", type=str, default="mot17")
+    parser.add_argument("--result_folder", type=str, default="results/trackers/")
     parser.add_argument("--exp_name", type=str, default="exp1")
     parser.add_argument("--min_box_area", type=float, default=10, help="filter out tiny boxes")
     parser.add_argument(
@@ -35,16 +36,30 @@ def get_main_args():
         default=0.90,
         help="Alpha fixed for EMA embedding",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.dataset == "mot17":
+        args.result_folder = os.path.join(args.result_folder, "MOT17-val")
+    elif args.dataset == "mot20":
+        args.result_folder = os.path.join(args.result_folder, "MOT20-val")
+    return args
 
 
 def main():
-    """Hardcoded to MOT17, OCSort for now."""
-    # Set up loader, detector, tracker
+    # Set dataset and detector
     args = get_main_args()
-    loader = dataset.get_mot17_loader()
-    det = detector.Detector("yolox", "external/weights/bytetrack_ablation.pth.tar")
-    tracker = tracker_module.ocsort.OCSort(
+    loader = dataset.get_mot_loader(args.dataset)
+    if args.dataset == "mot17":
+        detector_path = "external/weights/bytetrack_ablation.pth.tar"
+    elif args.dataset == "mot20":
+        # TODO: Shouldn't be trained on the other half
+        detector_path = "external/weights/bytetrack_x_mot20.tar"
+    else:
+        raise RuntimeError("Need to update paths for detector for extra datasets.")
+    det = detector.Detector("yolox", detector_path)
+
+    # Set up tracker
+    oc_sort_args = dict(
         det_thresh=args.track_thresh,
         iou_threshold=args.iou_thresh,
         asso_func=args.asso,
@@ -53,6 +68,7 @@ def main():
         w_association_emb=args.w_assoc_emb,
         alpha_fixed_emb=args.alpha_fixed_emb,
     )
+    tracker = tracker_module.ocsort.OCSort(**oc_sort_args)
     results = {}
 
     # See __getitem__ of dataset.MOTDataset
@@ -70,13 +86,7 @@ def main():
         if frame_id == 1:
             print(f"Initializing tracker for {video_name}")
             tracker.dump_cache()
-            tracker = tracker_module.ocsort.OCSort(
-                det_thresh=args.track_thresh,
-                iou_threshold=args.iou_thresh,
-                asso_func=args.asso,
-                delta_t=args.deltat,
-                inertia=args.inertia,
-            )
+            tracker = tracker_module.ocsort.OCSort(**oc_sort_args)
 
         # Nx5 of (x1, y1, x2, y2, conf), pass in tag for caching
         pred = det(img, tag)
@@ -122,20 +132,6 @@ def draw(name, pred, i):
             thickness=3,
         )
     cv2.imwrite(f"debug/{i}.png", img)
-
-
-def draw2(img, pred):
-    img = img.squeeze(0).permute(1, 2, 0).cpu().numpy()
-    img *= np.array((0.229, 0.224, 0.225))
-    img += np.array((0.485, 0.456, 0.406))
-    img *= 255
-    img = np.ascontiguousarray(img.clip(0, 255).astype(np.uint8))
-
-    pred = pred.cpu().numpy()
-    for p in pred:
-        p = np.round(p).astype(np.int32)
-        cv2.rectangle(img, (p[0], p[1]), (p[2], p[3]), (255, 0, 0), 5)
-    cv2.imwrite("debug.png", img)
 
 
 if __name__ == "__main__":
