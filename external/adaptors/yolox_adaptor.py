@@ -1,28 +1,30 @@
 import sys
 
-import torch 
+import torch
 import torch.nn as nn
 
 from yolox.models import YOLOPAFPN, YOLOX, YOLOXHead
 from yolox.utils import postprocess
 
 
-class PostModel(nn.Module): 
-    def __init__(self, model): 
+class PostModel(nn.Module):
+    def __init__(self, model):
         super().__init__()
         self.exp = Exp()
         self.model = model
 
-    def forward(self, batch): 
+    def forward(self, batch):
         """
         Returns Nx5, (x1, y1, x2, y2, conf)
         """
         raw = self.model(batch)
-        pred = postprocess(raw, self.exp.num_classes, self.exp.test_conf, self.exp.nmsthre)[0]
+        pred = postprocess(
+            raw, self.exp.num_classes, self.exp.test_conf, self.exp.nmsthre
+        )[0]
         return torch.cat((pred[:, :4], (pred[:, 4] * pred[:, 5])[:, None]), dim=1)
 
 
-def get_model(path): 
+def get_model(path):
     model = Exp().get_model()
     ckpt = torch.load(path)
     model.load_state_dict(ckpt["model"])

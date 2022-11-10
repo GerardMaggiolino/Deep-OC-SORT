@@ -8,9 +8,7 @@ from external.adaptors import yolox_adaptor
 
 
 class Detector(torch.nn.Module):
-    K_MODELS = {
-        "yolox": "external/weights/bytetrack_ablation.pth.tar"
-    }
+    K_MODELS = {"yolox": "external/weights/bytetrack_ablation.pth.tar"}
 
     def __init__(self, model_type, path=None):
         super().__init__()
@@ -23,7 +21,9 @@ class Detector(torch.nn.Module):
         self.model = None
 
         os.makedirs("./cache", exist_ok=True)
-        self.cache_path = os.path.join("./cache", f"det_{os.path.basename(path).split('.')[0]}.pkl")
+        self.cache_path = os.path.join(
+            "./cache", f"det_{os.path.basename(path).split('.')[0]}.pkl"
+        )
         self.cache = {}
         if os.path.exists(self.cache_path):
             with open(self.cache_path, "rb") as fp:
@@ -49,7 +49,6 @@ class Detector(torch.nn.Module):
             self.cache[tag] = output.cpu()
 
         return output
-
 
     def dump_cache(self):
         with open(self.cache_path, "wb") as fp:
