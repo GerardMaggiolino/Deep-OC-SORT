@@ -8,7 +8,7 @@ from pycocotools.coco import COCO
 
 def get_mot17_loader(
     batch_size=1,
-    workers=2,
+    workers=4,
     data_dir="data",
     annotation="val_half.json",
     size=(800, 1440),
@@ -147,10 +147,8 @@ class MOTDataset(torch.utils.data.Dataset):
             img_id (int): same as the input index. Used for evaluation.
         """
         img, target, img_info, img_id = self.pull_item(index)
-
-        if self.preproc is not None:
-            img, target = self.preproc(img, target, self.input_dim)
-        return img, target, img_info, img_id
+        tensor, target = self.preproc(img, target, self.input_dim)
+        return (tensor, img), target, img_info, img_id
 
 
 class ValTransform:

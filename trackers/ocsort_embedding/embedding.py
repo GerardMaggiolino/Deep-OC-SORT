@@ -20,7 +20,15 @@ class EmbeddingComputer:
 
     def compute_embedding(self, img, bbox, tag):
         if tag in self.cache:
-            return self.cache[tag]
+            embs = self.cache[tag]
+            if embs.shape[0] != bbox.shape[0]:
+                raise RuntimeError(
+                    "ERROR: The number of cached embeddings don't match the "
+                    "number of detections.\nWas the detector model changed? Delete cache if so."
+                )
+            return embs
+        print("Embedding: not using cache")
+
         if self.model is None:
             self.initialize_model()
 
@@ -33,7 +41,7 @@ class EmbeddingComputer:
         # Generate all the crops
         crops = []
         for p in results:
-            crop = img[:, :, p[1]:p[3], p[0]:p[2]]
+            crop = img[:, :, p[1] : p[3], p[0] : p[2]]
             try:
                 crop = torchvision.transforms.functional.resize(crop, (256, 128))
                 crops.append(crop)
@@ -52,12 +60,7 @@ class EmbeddingComputer:
         return embs
 
     def initialize_model(self):
-        model = torchreid.models.build_model(
-            name="osnet_ain_x1_0",
-            num_classes=2510,
-            loss="softmax",
-            pretrained=False
-        )
+        model = torchreid.models.build_model(name="osnet_ain_x1_0", num_classes=2510, loss="softmax", pretrained=False)
         sd = torch.load("external/weights/osnet_ain_ms_d_c.pth.tar")["state_dict"]
         new_state_dict = OrderedDict()
         for k, v in sd.items():

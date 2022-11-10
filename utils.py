@@ -14,7 +14,12 @@ def write_results_no_score(filename, results):
                     continue
                 x1, y1, w, h = tlwh
                 line = save_format.format(
-                    frame=frame_id, id=track_id, x1=round(x1, 1), y1=round(y1, 1), w=round(w, 1), h=round(h, 1)
+                    frame=frame_id,
+                    id=track_id,
+                    x1=round(x1, 1),
+                    y1=round(y1, 1),
+                    w=round(w, 1),
+                    h=round(h, 1),
                 )
                 f.write(line)
 
@@ -38,8 +43,8 @@ def filter_targets(online_targets, aspect_ratio_thresh, min_box_area):
 
 def dti(txt_path, save_path, n_min=30, n_dti=20):
     def dti_write_results(filename, results):
-        save_format = '{frame},{id},{x1},{y1},{w},{h},{s},-1,-1,-1\n'
-        with open(filename, 'w') as f:
+        save_format = "{frame},{id},{x1},{y1},{w},{h},{s},-1,-1,-1\n"
+        with open(filename, "w") as f:
             for i in range(results.shape[0]):
                 frame_data = results[i]
                 frame_id = int(frame_data[0])

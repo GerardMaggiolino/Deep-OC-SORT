@@ -390,20 +390,16 @@ class KalmanFilterNew(object):
 
         Messy due to internal logic for kalman filter being messy.
         """
-        # Handle frozen update
-        x = self.x if self.observed or self.attr_saved is None else self.attr_saved['x']
-
-        new_p = m @ x[:2] + t
-        new_v = m @ x[4:6]
-
-        if not self.observed and self.attr_saved is not None:
-            self.attr_saved['x'][:2] = new_p
-            self.attr_saved['x'][4:6] = new_v
-            p = self.attr_saved['last_measurement'][:2]
-            self.attr_saved['last_measurement'][:2] = m @ p + t
-
+        new_p = m @ self.x[:2] + t
+        new_v = m @ self.x[4:6]
         self.x[:2] = new_p
         self.x[4:6] = new_v
+
+        # If frozen, also need to update the frozen state for OOS
+        if not self.observed and self.attr_saved is not None:
+            self.attr_saved["x"][:2] = new_p
+            self.attr_saved["x"][4:6] = new_v
+            self.attr_saved["last_measurement"][:2] = m @ self.attr_saved["last_measurement"][:2] + t
 
     def unfreeze(self):
         if self.attr_saved is not None:

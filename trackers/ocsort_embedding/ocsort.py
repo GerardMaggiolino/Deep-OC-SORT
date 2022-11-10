@@ -70,7 +70,7 @@ class KalmanBoxTracker(object):
 
     count = 0
 
-    def __init__(self, bbox, delta_t=3, orig=False, emb=None):
+    def __init__(self, bbox, delta_t=3, orig=False, emb=None, alpha=0):
         """
         Initialises a tracker using initial bounding box.
 
@@ -86,7 +86,7 @@ class KalmanBoxTracker(object):
             self.kf = KalmanFilter(dim_x=7, dim_z=4)
         self.kf.F = np.array(
             [
-               # x  y  s  r  x' y' r' 0
+                # x  y  s  r  x' y' r' 0
                 [1, 0, 0, 0, 1, 0, 0],
                 [0, 1, 0, 0, 0, 1, 0],
                 [0, 0, 1, 0, 0, 0, 1],
@@ -124,11 +124,15 @@ class KalmanBoxTracker(object):
         function k_previous_obs. It is ugly and I do not like it. But to support generate observation array in a 
         fast and unified way, which you would see below k_observations = np.array([k_previous_obs(...]]), let's bear it for now.
         """
+        # Used for OCR
         self.last_observation = np.array([-1, -1, -1, -1, -1])  # placeholder
-        self.observations = dict()
+        # Used to output track after min_hits reached
         self.history_observations = []
+        # Used for velocity
+        self.observations = dict()
         self.velocity = None
         self.delta_t = delta_t
+
         self.emb = emb
 
     def update(self, bbox):
@@ -138,8 +142,7 @@ class KalmanBoxTracker(object):
         if bbox is not None:
             if self.last_observation.sum() >= 0:  # no previous observation
                 previous_box = None
-                for i in range(self.delta_t):
-                    dt = self.delta_t - i
+                for dt in range(self.delta_t, 0, -1):
                     if self.age - dt in self.observations:
                         previous_box = self.observations[self.age - dt]
                         break
@@ -149,7 +152,6 @@ class KalmanBoxTracker(object):
                   Estimate the track speed direction with observations \Delta t steps away
                 """
                 self.velocity = speed_direction(previous_box, bbox)
-
             """
               Insert new observations. This is a ugly way to maintain both self.observations
               and self.history_observations. Bear it for the moment.
@@ -168,18 +170,27 @@ class KalmanBoxTracker(object):
 
     def update_emb(self, emb, alpha=0.9):
         self.emb = alpha * self.emb + (1 - alpha) * emb
-        self.emb = self.emb / (self.emb ** 2).sum()
+        self.emb /= np.linalg.norm(self.emb)
+
+    def get_emb(self):
+        return self.emb
 
     def apply_affine_correction(self, affine):
-        # Correct last observation (used in OCR)
-        p_old = self.last_observation[:4].reshape(2, 2).T
         m = affine[:, :2]
         t = affine[:, 2].reshape(2, 1)
-        p_new = m @ p_old + t
-        self.last_observation[:2] = p_new[:, 0]
-        self.last_observation[2:4] = p_new[:, 1]
+        # For OCR
+        if self.last_observation.sum() > 0:
+            ps = self.last_observation[:4].reshape(2, 2).T
+            ps = m @ ps + t
+            self.last_observation[:4] = ps.T.reshape(-1)
 
-        # TODO: Need to change for velocity
+        # Apply to each box in the range of velocity computation
+        for dt in range(self.delta_t, -1, -1):
+            if self.age - dt in self.observations:
+                ps = self.observations[self.age - dt][:4].reshape(2, 2).T
+                ps = m @ ps + t
+                self.observations[self.age - dt][:4] = ps.T.reshape(-1)
+
         # Also need to change kf state, but might be frozen
         self.kf.apply_affine_correction(m, t)
 
@@ -231,7 +242,7 @@ class OCSort(object):
         asso_func="iou",
         inertia=0.2,
         w_association_emb=0.75,
-        alpha_fixed_emb=0.95
+        alpha_fixed_emb=0.95,
     ):
         """
         Sets key parameters for SORT
@@ -252,7 +263,7 @@ class OCSort(object):
         self.embedder = EmbeddingComputer()
         self.cmc = CMCComputer()
 
-    def update(self, output_results, img, tag):
+    def update(self, output_results, img_tensor, img_numpy, tag):
         """
         Params:
           dets - a numpy array of detections in the format [[x1,y1,x2,y2,score],[x1,y1,x2,y2,score],...]
@@ -272,19 +283,19 @@ class OCSort(object):
             output_results = output_results
             scores = output_results[:, 4] * output_results[:, 5]
             bboxes = output_results[:, :4]  # x1y1x2y2
-
-        # TODO: Make sure the img and bboxes are the same size scale
-        dets_embs = self.embedder.compute_embedding(img, bboxes, tag)
-        transform = self.cmc.compute_affine(img, bboxes, tag)
-        for trk in self.trackers:
-            trk.apply_affine_correction(transform)
-
         dets = np.concatenate((bboxes, np.expand_dims(scores, axis=-1)), axis=1)
         remain_inds = scores > self.det_thresh
         dets = dets[remain_inds]
 
-        # Alpha for embeddings based on detector confidence model
-        dets_embs = dets_embs[remain_inds]
+        # Compute embeddings before rescaling
+        dets_embs = self.embedder.compute_embedding(img_tensor, dets[:, :4], tag)
+        # Rescale
+        scale = min(img_tensor.shape[2] / img_numpy.shape[1], img_tensor.shape[3] / img_numpy.shape[2])
+        dets[:, :4] /= scale
+        transform = self.cmc.compute_affine(img_numpy, dets[:, :4], tag)
+        for trk in self.trackers:
+            trk.apply_affine_correction(transform)
+
         trust = (dets[:, 4] - self.det_thresh) / (1 - self.det_thresh)
         af = self.alpha_fixed_emb
         dets_alpha = af + (1 - af) * (1 - trust)
@@ -300,7 +311,7 @@ class OCSort(object):
             if np.any(np.isnan(pos)):
                 to_del.append(t)
             else:
-                trk_embs.append(self.trackers[t].emb)
+                trk_embs.append(self.trackers[t].get_emb())
         trks = np.ma.compress_rows(np.ma.masked_invalid(trks))
         trk_embs = np.array(trk_embs)
         for t in reversed(to_del):
@@ -315,8 +326,14 @@ class OCSort(object):
         """
         stage1_emb_cost = None if trk_embs.shape[0] == 0 else dets_embs @ trk_embs.T
         matched, unmatched_dets, unmatched_trks = associate(
-            dets, trks, self.iou_threshold, velocities, k_observations, self.inertia, stage1_emb_cost,
-            self.w_association_emb
+            dets,
+            trks,
+            self.iou_threshold,
+            velocities,
+            k_observations,
+            self.inertia,
+            stage1_emb_cost,
+            self.w_association_emb,
         )
         for m in matched:
             self.trackers[m[1]].update(dets[m[0], :])
@@ -359,7 +376,7 @@ class OCSort(object):
 
         # create and initialise new trackers for unmatched detections
         for i in unmatched_dets:
-            trk = KalmanBoxTracker(dets[i, :], delta_t=self.delta_t, emb=dets_embs[i])
+            trk = KalmanBoxTracker(dets[i, :], delta_t=self.delta_t, emb=dets_embs[i], alpha=dets_alpha[i])
             self.trackers.append(trk)
         i = len(self.trackers)
         for trk in reversed(self.trackers):
@@ -502,3 +519,7 @@ class OCSort(object):
         if len(ret) > 0:
             return np.concatenate(ret)
         return np.empty((0, 7))
+
+    def dump_cache(self):
+        self.cmc.dump_cache()
+        self.embedder.dump_cache()
