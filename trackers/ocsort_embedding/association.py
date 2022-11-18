@@ -329,7 +329,7 @@ def associate(detections, trackers, iou_threshold, velocities, previous_obs, vdc
             else:
                 emb_cost[iou_matrix <= 0] = 0
             if not aw_off:
-                emb_cost = compute_aw(emb_cost, w_assoc_emb)
+                emb_cost = compute_aw_max_metric(emb_cost, w_assoc_emb)
 
             final_cost = -(iou_matrix + angle_diff_cost + emb_cost)
             matched_indices = linear_assignment(final_cost)

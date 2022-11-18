@@ -388,6 +388,7 @@ class OCSort(object):
         if self.embedding_off:
             dets_embs = np.ones((dets.shape[0], 1))
         else:
+            # (Ndets x 2048)
             dets_embs = self.embedder.compute_embedding(img_tensor, dets[:, :4], tag)
         # Rescale
         scale = min(img_tensor.shape[2] / img_numpy.shape[1], img_tensor.shape[3] / img_numpy.shape[2])
@@ -401,6 +402,7 @@ class OCSort(object):
 
         trust = (dets[:, 4] - self.det_thresh) / (1 - self.det_thresh)
         af = self.alpha_fixed_emb
+        # From [self.alpha_fixed_emb, 1], goes to 1 as detector is less confident
         dets_alpha = af + (1 - af) * (1 - trust)
 
         # get predicted locations from existing trackers.
@@ -427,6 +429,7 @@ class OCSort(object):
         """
             First round of association
         """
+        # (M detections X N tracks, final score)
         stage1_emb_cost = None if trk_embs.shape[0] == 0 else dets_embs @ trk_embs.T
         if self.embedding_off:
             stage1_emb_cost = None
@@ -455,6 +458,7 @@ class OCSort(object):
             left_trks_embs = trk_embs[unmatched_trks]
 
             iou_left = self.asso_func(left_dets, left_trks)
+            # TODO: is better without this
             emb_cost_left = left_dets_embs @ left_trks_embs.T
             if self.embedding_off:
                 emb_cost_left = np.zeros_like(emb_cost_left)

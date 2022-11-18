@@ -94,7 +94,7 @@ def main():
         print(f"Processing {video_name}:{frame_id}\r", end="")
         if frame_id == 1:
             print(f"Initializing tracker for {video_name}")
-            # tracker.dump_cache()
+            tracker.dump_cache()
             tracker = tracker_module.ocsort.OCSort(**oc_sort_args)
 
         # Nx5 of (x1, y1, x2, y2, conf), pass in tag for caching
@@ -106,8 +106,8 @@ def main():
         results[video_name].append((frame_id, tlwhs, ids))
 
     # Save detector results
-    # det.dump_cache()
-    # tracker.dump_cache()
+    det.dump_cache()
+    tracker.dump_cache()
 
     # Save for all sequences
     folder = os.path.join(args.result_folder, args.exp_name, "data")
