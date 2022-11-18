@@ -35,12 +35,26 @@ python3 data/tools/convert_mot17_to_coco.py
 python3 data/tools/convert_mot20_to_coco.py
 ```
 
+
+
 ### Evaluation
 
 Set `exp=exp1`
 
-Run `python3 main.py --exp_name $exp`, which will evaluate on MOT17, 
-and create results at `results/trackers/MOT17-val/$exp`.
+
+For the baseline, MOT17/20: 
+```
+python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --dataset mot17
+python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --dataset mot20
+```
+
+For the best results so far: 
+```
+python3 main.py --exp_name $exp --post --new_kf_off --w_assoc_emb 0.75
+python3 main.py --exp_name $exp --post --new_kf_off --w_assoc_emb 0.75 --dataset mot20
+```
+
+This will create results at `results/trackers/MOT<17/20>-val/$exp`.
 
 To run TrackEval for HOTA, on this new results, run: 
 ```bash
