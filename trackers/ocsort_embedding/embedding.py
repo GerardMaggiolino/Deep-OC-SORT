@@ -1,3 +1,4 @@
+import pdb
 from collections import OrderedDict
 import os
 import pickle
@@ -7,10 +8,13 @@ import torchvision
 import torchreid
 import numpy as np
 
+from external.adaptors.fastreid_adaptor import FastReID
+
 
 class EmbeddingComputer:
     def __init__(self):
         self.model = None
+        self.crop_size = (256, 128)
         os.makedirs("./cache", exist_ok=True)
         self.cache_path = "./cache/embedding_ocsort.pkl"
         self.cache = {}
@@ -27,7 +31,6 @@ class EmbeddingComputer:
                     "number of detections.\nWas the detector model changed? Delete cache if so."
                 )
             return embs
-        print("Embedding: not using cache")
 
         if self.model is None:
             self.initialize_model()
@@ -43,11 +46,11 @@ class EmbeddingComputer:
         for p in results:
             crop = img[:, :, p[1] : p[3], p[0] : p[2]]
             try:
-                crop = torchvision.transforms.functional.resize(crop, (256, 128))
+                crop = torchvision.transforms.functional.resize(crop, self.crop_size)
                 crops.append(crop)
             except:
                 print("Error generating crop for EmbeddingComputer")
-                crops.append(torch.randn(3, 256, 128).cuda())
+                crops.append(torch.randn(3, *self.crop_size).cuda())
         crops = torch.cat(crops, dim=0)
 
         # Create embeddings and l2 normalize them
@@ -55,8 +58,8 @@ class EmbeddingComputer:
             embs = self.model(crops)
         embs = torch.nn.functional.normalize(embs)
         embs = embs.cpu().numpy()
-        if tag is not None:
-            self.cache[tag] = embs
+
+        self.cache[tag] = embs
         return embs
 
     def initialize_model(self):

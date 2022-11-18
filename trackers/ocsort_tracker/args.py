@@ -3,18 +3,8 @@ import argparse
 
 def make_parser():
     parser = argparse.ArgumentParser("OC-SORT parameters")
-    parser.add_argument("--expn", type=str, default=None)
-    parser.add_argument("-n", "--name", type=str, default=None, help="model name")
 
     # distributed
-    parser.add_argument("--dist-backend", default="nccl", type=str, help="distributed backend")
-    parser.add_argument("--output_dir", type=str, default="evaldata/trackers/mot_challenge")
-    parser.add_argument(
-        "--dist-url",
-        default=None,
-        type=str,
-        help="url used to set up distributed training",
-    )
     parser.add_argument("-b", "--batch-size", type=int, default=1, help="batch size")
     parser.add_argument("-d", "--devices", default=None, type=int, help="device for training")
 
@@ -30,32 +20,11 @@ def make_parser():
         help="pls input your expriment description file",
     )
     parser.add_argument(
-        "--fuse",
-        dest="fuse",
-        default=False,
-        action="store_true",
-        help="Fuse conv and bn for testing.",
-    )
-    parser.add_argument(
-        "--trt",
-        dest="trt",
-        default=False,
-        action="store_true",
-        help="Using TensorRT model for testing.",
-    )
-    parser.add_argument(
         "--test",
         dest="test",
         default=False,
         action="store_true",
         help="Evaluating on test-dev set.",
-    )
-    parser.add_argument(
-        "--speed",
-        dest="speed",
-        default=False,
-        action="store_true",
-        help="speed test only.",
     )
     parser.add_argument(
         "opts",
@@ -105,16 +74,8 @@ def make_parser():
         default="_val_half",
         help="suffix to find the gt annotation",
     )
-    parser.add_argument("--mot20", dest="mot20", default=False, action="store_true", help="test mot20.")
     parser.add_argument("--public", action="store_true", help="use public detection")
     parser.add_argument("--asso", default="iou", help="similarity function: iou/giou/diou/ciou/ctdis")
-    parser.add_argument(
-        "--use_byte",
-        dest="use_byte",
-        default=False,
-        action="store_true",
-        help="use byte in tracking.",
-    )
 
     # for kitti/bdd100k inference with public detections
     parser.add_argument(
@@ -124,7 +85,6 @@ def make_parser():
         help="path to the raw tracking results from other tracks",
     )
     parser.add_argument("--out_path", type=str, help="path to save output results")
-    parser.add_argument("--dataset", type=str, default="mot", help="kitti or bdd")
     parser.add_argument(
         "--hp",
         action="store_true",

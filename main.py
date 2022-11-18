@@ -1,5 +1,6 @@
 import pdb
 import os
+import shutil
 
 import torch
 import cv2
@@ -25,17 +26,20 @@ def get_main_args():
     )
     parser.add_argument(
         "--post",
-        type=bool,
-        default=True,
+        action="store_true",
         help="run post-processing linear interpolation.",
     )
     parser.add_argument("--w_assoc_emb", type=float, default=0.75, help="Combine weight for emb cost")
     parser.add_argument(
         "--alpha_fixed_emb",
         type=float,
-        default=0.90,
+        default=0.95,
         help="Alpha fixed for EMA embedding",
     )
+    parser.add_argument("--emb_off", action="store_true")
+    parser.add_argument("--cmc_off", action="store_true")
+    parser.add_argument("--aw_off", action="store_true")
+    parser.add_argument("--new_kf_off", action="store_true")
     args = parser.parse_args()
 
     if args.dataset == "mot17":
@@ -52,14 +56,15 @@ def main():
     if args.dataset == "mot17":
         detector_path = "external/weights/bytetrack_ablation.pth.tar"
     elif args.dataset == "mot20":
-        # TODO: Shouldn't be trained on the other half
-        detector_path = "external/weights/bytetrack_x_mot20.tar"
+        # TODO: Just use the mot17 test model as the ablation model for 20
+        detector_path = "external/weights/bytetrack_x_mot17.pth.tar"
     else:
         raise RuntimeError("Need to update paths for detector for extra datasets.")
     det = detector.Detector("yolox", detector_path)
 
     # Set up tracker
     oc_sort_args = dict(
+        args=args,
         det_thresh=args.track_thresh,
         iou_threshold=args.iou_thresh,
         asso_func=args.asso,
@@ -67,6 +72,10 @@ def main():
         inertia=args.inertia,
         w_association_emb=args.w_assoc_emb,
         alpha_fixed_emb=args.alpha_fixed_emb,
+        embedding_off=args.emb_off,
+        cmc_off=args.cmc_off,
+        aw_off=args.aw_off,
+        new_kf_off=args.new_kf_off
     )
     tracker = tracker_module.ocsort.OCSort(**oc_sort_args)
     results = {}
@@ -85,7 +94,7 @@ def main():
         print(f"Processing {video_name}:{frame_id}\r", end="")
         if frame_id == 1:
             print(f"Initializing tracker for {video_name}")
-            tracker.dump_cache()
+            # tracker.dump_cache()
             tracker = tracker_module.ocsort.OCSort(**oc_sort_args)
 
         # Nx5 of (x1, y1, x2, y2, conf), pass in tag for caching
@@ -97,8 +106,8 @@ def main():
         results[video_name].append((frame_id, tlwhs, ids))
 
     # Save detector results
-    det.dump_cache()
-    tracker.dump_cache()
+    # det.dump_cache()
+    # tracker.dump_cache()
 
     # Save for all sequences
     folder = os.path.join(args.result_folder, args.exp_name, "data")
@@ -108,12 +117,18 @@ def main():
         utils.write_results_no_score(result_filename, res)
     print(f"Finished, results saved to {folder}")
     if args.post:
-        utils.dti(folder, folder)
-        print("Linear interpolation post-processing applied.")
+        post_folder = os.path.join(args.result_folder, args.exp_name + "_post")
+        pre_folder = os.path.join(args.result_folder, args.exp_name)
+        if os.path.exists(post_folder):
+            print(f"Overwriting previous results in {post_folder}")
+            shutil.rmtree(post_folder)
+        shutil.copytree(pre_folder, post_folder)
+        post_folder_data = os.path.join(post_folder, "data")
+        utils.dti(post_folder_data, post_folder_data)
+        print(f"Linear interpolation post-processing applied, saved to {post_folder_data}.")
 
 
 def draw(name, pred, i):
-    pred = pred[pred[:, 4] > 0.6]
     pred = pred.cpu().numpy()
     name = os.path.join("data/mot/train", name)
     img = cv2.imread(name)

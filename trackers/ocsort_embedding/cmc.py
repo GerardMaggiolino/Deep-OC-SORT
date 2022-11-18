@@ -7,8 +7,8 @@ import numpy as np
 
 
 class CMCComputer:
-    def __init__(self, minimum_features=10, method="sparse"):
-        assert method in ["sparse", "sift"]
+    def __init__(self, minimum_features=10, method="file"):
+        assert method in ["file", "sparse", "sift"]
 
         os.makedirs("./cache", exist_ok=True)
         self.cache_path = "./cache/affine_ocsort.pkl"
@@ -27,19 +27,32 @@ class CMCComputer:
             useHarrisDetector=False,
             k=0.04,
         )
+        self.file_computed = {}
 
         self.comp_function = None
         if method == "sparse":
             self.comp_function = self._affine_sparse_flow
         elif method == "sift":
             self.comp_function = self._affine_sift
+        elif method == "file":
+            self.comp_function = self._affine_file
+            self.file_affines = {}
+            # Maps from tag name to file name
+            self.file_names = {}
+            for f_name in os.listdir("./cache/cmc_files/MOT17_ablation/"):
+                tag = f_name.replace("GMC-", "").replace(".txt", "") + "-FRCNN"
+                f_name = os.path.join("./cache/cmc_files/MOT17_ablation/", f_name)
+                self.file_names[tag] = f_name
+            for f_name in os.listdir("./cache/cmc_files/MOT20_ablation/"):
+                tag = f_name.replace("GMC-", "").replace(".txt", "")
+                f_name = os.path.join("./cache/cmc_files/MOT20_ablation/", f_name)
+                self.file_names[tag] = f_name
 
     def compute_affine(self, img, bbox, tag):
         img = cv2.cvtColor(img[0].numpy(), cv2.COLOR_BGR2GRAY)
         if tag in self.cache:
             A = self.cache[tag]
             return A
-        print("CMC: not using cached")
 
         mask = np.ones_like(img, dtype=np.uint8)
         bbox = np.round(bbox).astype(np.int32)
@@ -47,13 +60,36 @@ class CMCComputer:
         for bb in bbox:
             mask[bb[1] : bb[3], bb[0] : bb[2]] = 0
 
-        A = self.comp_function(img, mask)
-        if tag not in self.cache:
-            self.cache[tag] = A
+        A = self.comp_function(img, mask, tag)
+        self.cache[tag] = A
 
         return A
 
-    def _affine_sift(self, frame, mask):
+    def _load_file(self, name):
+        affines = []
+        with open(self.file_names[name], "r") as fp:
+            for line in fp:
+                tokens = [float(f) for f in line.split("\t")[1:7]]
+                A = np.eye(2, 3)
+                A[0, 0] = tokens[0]
+                A[0, 1] = tokens[1]
+                A[0, 2] = tokens[2]
+                A[1, 0] = tokens[3]
+                A[1, 1] = tokens[4]
+                A[1, 2] = tokens[5]
+                affines.append(A)
+        self.file_affines[name] = affines
+
+    def _affine_file(self, frame, mask, tag):
+        name, num = tag.split(":")
+        if name not in self.file_affines:
+            self._load_file(name)
+        if name not in self.file_affines:
+            raise RuntimeError("Error loading file affines for CMC.")
+
+        return self.file_affines[name][int(num) - 1]
+
+    def _affine_sift(self, frame, mask, tag):
         A = np.eye(2, 3)
         detector = cv2.SIFT_create()
         kp, desc = detector.detectAndCompute(frame, mask)
@@ -82,7 +118,7 @@ class CMCComputer:
         self.prev_desc = [kp, desc]
         return A
 
-    def _affine_sparse_flow(self, frame, mask):
+    def _affine_sparse_flow(self, frame, mask, tag):
         # Initialize
         A = np.eye(2, 3)
 
@@ -96,7 +132,10 @@ class CMCComputer:
             return A
 
         matched_kp, status, err = cv2.calcOpticalFlowPyrLK(self.prev_img, frame, self.prev_desc, None)
-        prev_points = self.prev_desc[status]
+        matched_kp = matched_kp.reshape(-1, 2)
+        status = status.reshape(-1)
+        prev_points = self.prev_desc.reshape(-1, 2)
+        prev_points = prev_points[status]
         curr_points = matched_kp[status]
 
         # Find rigid matrix

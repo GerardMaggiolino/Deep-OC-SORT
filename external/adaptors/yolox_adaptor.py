@@ -69,9 +69,6 @@ class Exp:
         self.print_interval = 10
         self.eval_interval = 10
         # -----------------  testing config ------------------ #
-        self.test_conf = 0.001
-        self.nmsthre = 0.65
-
         self.num_classes = 1
         self.depth = 1.33
         self.width = 1.25

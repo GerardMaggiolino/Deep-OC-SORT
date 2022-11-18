@@ -259,7 +259,38 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.3):
     return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
 
 
-def associate(detections, trackers, iou_threshold, velocities, previous_obs, vdc_weight, emb_cost, w_assoc_emb):
+def compute_aw_max_metric(emb_cost, w_association_emb, bottom=0.5):
+    w_emb = np.ones_like(emb_cost)
+    w_emb *= w_association_emb * 4
+
+    for idx in range(emb_cost.shape[0]):
+        inds = np.argsort(-emb_cost[idx])
+        if emb_cost[idx, inds[0]] == 0:
+            row_weight = 0
+        else:
+            row_weight = 1 - max((emb_cost[idx, inds[1]] / emb_cost[idx, inds[0]]) - bottom, 0) / (1 - bottom)
+        w_emb[idx] *= row_weight
+
+    for idj in range(emb_cost.shape[1]):
+        inds = np.argsort(-emb_cost[:, idj])
+        if emb_cost[inds[0], idj] == 0:
+            col_weight = 0
+        else:
+            col_weight = 1 - max((emb_cost[inds[1], idj] / emb_cost[inds[0], idj]) - bottom, 0) / (1 - bottom)
+        w_emb[:, idj] *= col_weight
+
+    return w_emb * emb_cost
+
+
+def compute_aw_kl(emb_cost, w_association_emb):
+    """TODO: Maybe try KL divergence, entropy, etc.
+
+    Requires normalizing to 0, 1 though (softmax)
+    """
+    pass
+
+
+def associate(detections, trackers, iou_threshold, velocities, previous_obs, vdc_weight, emb_cost, w_assoc_emb, aw_off):
     if len(trackers) == 0:
         return (
             np.empty((0, 2), dtype=int),
@@ -293,9 +324,14 @@ def associate(detections, trackers, iou_threshold, velocities, previous_obs, vdc
         if a.sum(1).max() == 1 and a.sum(0).max() == 1:
             matched_indices = np.stack(np.where(a), axis=1)
         else:
-            # final_cost = -(iou_matrix + angle_diff_cost + w_assoc_emb * emb_cost)
-            emb_cost[iou_matrix <= 0] = 0
-            final_cost = -(iou_matrix + angle_diff_cost + w_assoc_emb * emb_cost)
+            if emb_cost is None:
+                emb_cost = 0
+            else:
+                emb_cost[iou_matrix <= 0] = 0
+            if not aw_off:
+                emb_cost = compute_aw(emb_cost, w_assoc_emb)
+
+            final_cost = -(iou_matrix + angle_diff_cost + emb_cost)
             matched_indices = linear_assignment(final_cost)
     else:
         matched_indices = np.empty(shape=(0, 2))
@@ -404,3 +440,4 @@ def associate_kitti(detections, trackers, det_cates, iou_threshold, velocities, 
         matches = np.concatenate(matches, axis=0)
 
     return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
+

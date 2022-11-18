@@ -42,6 +42,19 @@ def convert_bbox_to_z(bbox):
     return np.array([x, y, s, r]).reshape((4, 1))
 
 
+def convert_bbox_to_z_new(bbox):
+    w = bbox[2] - bbox[0]
+    h = bbox[3] - bbox[1]
+    x = bbox[0] + w / 2.0
+    y = bbox[1] + h / 2.0
+    return np.array([x, y, w, h]).reshape((4, 1))
+
+
+def convert_x_to_bbox_new(x):
+    x, y, w, h = x.reshape(-1)[:4]
+    return np.array([x - w / 2, y - h / 2, x + w / 2, y + h / 2]).reshape(1, 4)
+
+
 def convert_x_to_bbox(x, score=None):
     """
     Takes a bounding box in the centre form [x,y,s,r] and returns it in the form
@@ -63,6 +76,23 @@ def speed_direction(bbox1, bbox2):
     return speed / norm
 
 
+def new_kf_process_noise(w, h, p=1 / 20, v=1 / 160):
+    Q = np.diag(
+        (
+            (p * w) ** 2, (p * h) ** 2, (p * w) ** 2, (p * h) ** 2,
+            (v * w) ** 2, (v * h) ** 2, (v * w) ** 2, (v * h) ** 2
+        )
+    )
+    return Q
+
+
+def new_kf_measurement_noise(w, h, m=1 / 20):
+    w_var = (m * w) ** 2
+    h_var = (m * h) ** 2
+    R = np.diag((w_var, h_var, w_var, h_var))
+    return R
+
+
 class KalmanBoxTracker(object):
     """
     This class represents the internal state of individual tracked objects observed as bbox.
@@ -70,7 +100,7 @@ class KalmanBoxTracker(object):
 
     count = 0
 
-    def __init__(self, bbox, delta_t=3, orig=False, emb=None, alpha=0):
+    def __init__(self, bbox, delta_t=3, orig=False, emb=None, alpha=0, new_kf=False):
         """
         Initialises a tracker using initial bounding box.
 
@@ -78,40 +108,72 @@ class KalmanBoxTracker(object):
         # define constant velocity model
         if not orig:
             from .kalmanfilter import KalmanFilterNew as KalmanFilter
-
-            self.kf = KalmanFilter(dim_x=7, dim_z=4)
         else:
             from filterpy.kalman import KalmanFilter
 
+        self.new_kf = new_kf
+        if new_kf:
+            self.kf = KalmanFilter(dim_x=8, dim_z=4)
+            self.kf.F = np.array(
+                [
+                    # x y w h x' y' w' h'
+                    [1, 0, 0, 0, 1, 0, 0, 0],
+                    [0, 1, 0, 0, 0, 1, 0, 0],
+                    [0, 0, 1, 0, 0, 0, 1, 0],
+                    [0, 0, 0, 1, 0, 0, 0, 1],
+                    [0, 0, 0, 0, 1, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 1, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 1, 0],
+                    [0, 0, 0, 0, 0, 0, 0, 1],
+                ]
+            )
+            self.kf.H = np.array(
+                [
+                    [1, 0, 0, 0, 0, 0, 0, 0],
+                    [0, 1, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 1, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 1, 0, 0, 0, 0],
+                ]
+            )
+            _, _, w, h = convert_bbox_to_z_new(bbox).reshape(-1)
+            self.kf.P = new_kf_process_noise(w, h)
+            self.kf.P[:4, :4] *= 4
+            self.kf.P[4:, 4:] *= 100
+            # Process and measurement uncertainty happen in functions
+            self.bbox_to_z_func = convert_bbox_to_z_new
+            self.x_to_bbox_func = convert_x_to_bbox_new
+        else:
             self.kf = KalmanFilter(dim_x=7, dim_z=4)
-        self.kf.F = np.array(
-            [
-                # x  y  s  r  x' y' r' 0
-                [1, 0, 0, 0, 1, 0, 0],
-                [0, 1, 0, 0, 0, 1, 0],
-                [0, 0, 1, 0, 0, 0, 1],
-                [0, 0, 0, 1, 0, 0, 0],
-                [0, 0, 0, 0, 1, 0, 0],
-                [0, 0, 0, 0, 0, 1, 0],
-                [0, 0, 0, 0, 0, 0, 1],
-            ]
-        )
-        self.kf.H = np.array(
-            [
-                [1, 0, 0, 0, 0, 0, 0],
-                [0, 1, 0, 0, 0, 0, 0],
-                [0, 0, 1, 0, 0, 0, 0],
-                [0, 0, 0, 1, 0, 0, 0],
-            ]
-        )
+            self.kf.F = np.array(
+                [
+                    # x  y  s  r  x' y' s'
+                    [1, 0, 0, 0, 1, 0, 0],
+                    [0, 1, 0, 0, 0, 1, 0],
+                    [0, 0, 1, 0, 0, 0, 1],
+                    [0, 0, 0, 1, 0, 0, 0],
+                    [0, 0, 0, 0, 1, 0, 0],
+                    [0, 0, 0, 0, 0, 1, 0],
+                    [0, 0, 0, 0, 0, 0, 1],
+                ]
+            )
+            self.kf.H = np.array(
+                [
+                    [1, 0, 0, 0, 0, 0, 0],
+                    [0, 1, 0, 0, 0, 0, 0],
+                    [0, 0, 1, 0, 0, 0, 0],
+                    [0, 0, 0, 1, 0, 0, 0],
+                ]
+            )
+            self.kf.R[2:, 2:] *= 10.0
+            self.kf.P[4:, 4:] *= 1000.0  # give high uncertainty to the unobservable initial velocities
+            self.kf.P *= 10.0
+            self.kf.Q[-1, -1] *= 0.01
+            self.kf.Q[4:, 4:] *= 0.01
+            self.bbox_to_z_func = convert_bbox_to_z
+            self.x_to_bbox_func = convert_x_to_bbox
 
-        self.kf.R[2:, 2:] *= 10.0
-        self.kf.P[4:, 4:] *= 1000.0  # give high uncertainty to the unobservable initial velocities
-        self.kf.P *= 10.0
-        self.kf.Q[-1, -1] *= 0.01
-        self.kf.Q[4:, 4:] *= 0.01
+        self.kf.x[:4] = self.bbox_to_z_func(bbox)
 
-        self.kf.x[:4] = convert_bbox_to_z(bbox)
         self.time_since_update = 0
         self.id = KalmanBoxTracker.count
         KalmanBoxTracker.count += 1
@@ -135,11 +197,15 @@ class KalmanBoxTracker(object):
 
         self.emb = emb
 
+        self.frozen = False
+
     def update(self, bbox):
         """
         Updates the state vector with observed bbox.
         """
         if bbox is not None:
+            self.frozen = False
+
             if self.last_observation.sum() >= 0:  # no previous observation
                 previous_box = None
                 for dt in range(self.delta_t, 0, -1):
@@ -164,9 +230,14 @@ class KalmanBoxTracker(object):
             self.history = []
             self.hits += 1
             self.hit_streak += 1
-            self.kf.update(convert_bbox_to_z(bbox))
+            if self.new_kf:
+                R = new_kf_measurement_noise(self.kf.x[2, 0], self.kf.x[3, 0])
+                self.kf.update(self.bbox_to_z_func(bbox), R=R)
+            else:
+                self.kf.update(self.bbox_to_z_func(bbox))
         else:
             self.kf.update(bbox)
+            self.frozen = True
 
     def update_emb(self, emb, alpha=0.9):
         self.emb = alpha * self.emb + (1 - alpha) * emb
@@ -192,28 +263,45 @@ class KalmanBoxTracker(object):
                 self.observations[self.age - dt][:4] = ps.T.reshape(-1)
 
         # Also need to change kf state, but might be frozen
-        self.kf.apply_affine_correction(m, t)
+        self.kf.apply_affine_correction(m, t, self.new_kf)
 
     def predict(self):
         """
         Advances the state vector and returns the predicted bounding box estimate.
         """
-        if (self.kf.x[6] + self.kf.x[2]) <= 0:
-            self.kf.x[6] *= 0.0
+        # Don't allow negative bounding boxes
+        if self.new_kf:
+            if self.kf.x[2] + self.kf.x[6] <= 0:
+                self.kf.x[6] = 0
+            if self.kf.x[3] + self.kf.x[7] <= 0:
+                self.kf.x[7] = 0
 
-        self.kf.predict()
+            # Stop velocity, will update in kf during OOS
+            if self.frozen:
+                self.kf.x[6] = self.kf.x[7] = 0
+            Q = new_kf_process_noise(self.kf.x[2, 0], self.kf.x[3, 0])
+        else:
+            if (self.kf.x[6] + self.kf.x[2]) <= 0:
+                self.kf.x[6] *= 0.0
+            Q = None
+
+        self.kf.predict(Q=Q)
         self.age += 1
         if self.time_since_update > 0:
             self.hit_streak = 0
         self.time_since_update += 1
-        self.history.append(convert_x_to_bbox(self.kf.x))
+        self.history.append(self.x_to_bbox_func(self.kf.x))
         return self.history[-1]
 
     def get_state(self):
         """
         Returns the current bounding box estimate.
         """
-        return convert_x_to_bbox(self.kf.x)
+        return self.x_to_bbox_func(self.kf.x)
+
+    def mahalanobis(self, bbox):
+        """Should be run after a predict() call for accuracy."""
+        return self.kf.md_for_measurement(self.bbox_to_z_func(bbox))
 
 
 """
@@ -243,6 +331,11 @@ class OCSort(object):
         inertia=0.2,
         w_association_emb=0.75,
         alpha_fixed_emb=0.95,
+        embedding_off=False,
+        cmc_off=False,
+        aw_off=False,
+        new_kf_off=False,
+        **kwargs
     ):
         """
         Sets key parameters for SORT
@@ -262,6 +355,10 @@ class OCSort(object):
 
         self.embedder = EmbeddingComputer()
         self.cmc = CMCComputer()
+        self.embedding_off = embedding_off
+        self.cmc_off = cmc_off
+        self.aw_off = aw_off
+        self.new_kf_off = new_kf_off
 
     def update(self, output_results, img_tensor, img_numpy, tag):
         """
@@ -288,13 +385,19 @@ class OCSort(object):
         dets = dets[remain_inds]
 
         # Compute embeddings before rescaling
-        dets_embs = self.embedder.compute_embedding(img_tensor, dets[:, :4], tag)
+        if self.embedding_off:
+            dets_embs = np.ones((dets.shape[0], 1))
+        else:
+            dets_embs = self.embedder.compute_embedding(img_tensor, dets[:, :4], tag)
         # Rescale
         scale = min(img_tensor.shape[2] / img_numpy.shape[1], img_tensor.shape[3] / img_numpy.shape[2])
         dets[:, :4] /= scale
-        transform = self.cmc.compute_affine(img_numpy, dets[:, :4], tag)
-        for trk in self.trackers:
-            trk.apply_affine_correction(transform)
+
+        # CMC
+        if not self.cmc_off:
+            transform = self.cmc.compute_affine(img_numpy, dets[:, :4], tag)
+            for trk in self.trackers:
+                trk.apply_affine_correction(transform)
 
         trust = (dets[:, 4] - self.det_thresh) / (1 - self.det_thresh)
         af = self.alpha_fixed_emb
@@ -325,6 +428,8 @@ class OCSort(object):
             First round of association
         """
         stage1_emb_cost = None if trk_embs.shape[0] == 0 else dets_embs @ trk_embs.T
+        if self.embedding_off:
+            stage1_emb_cost = None
         matched, unmatched_dets, unmatched_trks = associate(
             dets,
             trks,
@@ -334,6 +439,7 @@ class OCSort(object):
             self.inertia,
             stage1_emb_cost,
             self.w_association_emb,
+            self.aw_off
         )
         for m in matched:
             self.trackers[m[1]].update(dets[m[0], :])
@@ -350,6 +456,8 @@ class OCSort(object):
 
             iou_left = self.asso_func(left_dets, left_trks)
             emb_cost_left = left_dets_embs @ left_trks_embs.T
+            if self.embedding_off:
+                emb_cost_left = np.zeros_like(emb_cost_left)
             iou_left = np.array(iou_left)
             if iou_left.max() > self.iou_threshold:
                 """
@@ -376,7 +484,9 @@ class OCSort(object):
 
         # create and initialise new trackers for unmatched detections
         for i in unmatched_dets:
-            trk = KalmanBoxTracker(dets[i, :], delta_t=self.delta_t, emb=dets_embs[i], alpha=dets_alpha[i])
+            trk = KalmanBoxTracker(
+                dets[i, :], delta_t=self.delta_t, emb=dets_embs[i], alpha=dets_alpha[i], new_kf=not self.new_kf_off
+            )
             self.trackers.append(trk)
         i = len(self.trackers)
         for trk in reversed(self.trackers):
@@ -523,3 +633,7 @@ class OCSort(object):
     def dump_cache(self):
         self.cmc.dump_cache()
         self.embedder.dump_cache()
+
+
+
+

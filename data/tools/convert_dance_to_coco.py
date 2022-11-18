@@ -8,7 +8,7 @@ import json
 import cv2
 
 
-DATA_PATH = "datasets/dancetrack"
+DATA_PATH = "data/dancetrack"
 OUT_PATH = os.path.join(DATA_PATH, "annotations")
 # SPLITS = ['train', 'val', 'test']
 SPLITS = ["train", "val", "test"]

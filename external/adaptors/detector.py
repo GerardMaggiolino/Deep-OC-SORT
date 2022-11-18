@@ -36,17 +36,18 @@ class Detector(torch.nn.Module):
         if self.model_type == "yolox":
             self.model = yolox_adaptor.get_model(self.path)
         self.model.eval()
+        self.model.half()
 
     def forward(self, batch, tag=None):
         if tag in self.cache:
             return self.cache[tag]
-        elif self.model is None:
+        if self.model is None:
             self.initialize_model()
 
         with torch.no_grad():
+            batch = batch.half()
             output = self.model(batch)
-        if tag is not None:
-            self.cache[tag] = output.cpu()
+        self.cache[tag] = output.cpu()
 
         return output
 

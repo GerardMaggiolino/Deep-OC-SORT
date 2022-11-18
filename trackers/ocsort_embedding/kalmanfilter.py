@@ -383,23 +383,53 @@ class KalmanFilterNew(object):
         Save the parameters before non-observation forward
         """
         self.attr_saved = deepcopy(self.__dict__)
+        self.frozen = True
 
-    def apply_affine_correction(self, m, t):
+    def apply_affine_correction(self, m, t, new_kf):
         """
         Apply to both last state and last observation for OOS smoothing.
 
         Messy due to internal logic for kalman filter being messy.
         """
-        new_p = m @ self.x[:2] + t
-        new_v = m @ self.x[4:6]
-        self.x[:2] = new_p
-        self.x[4:6] = new_v
+        if new_kf:
+            big_m = np.kron(np.eye(4, dtype=float), m)
+            self.x = big_m @ self.x
+            self.x[:2] += t
+            self.P = big_m @ self.P @ big_m.T
 
-        # If frozen, also need to update the frozen state for OOS
-        if not self.observed and self.attr_saved is not None:
-            self.attr_saved["x"][:2] = new_p
-            self.attr_saved["x"][4:6] = new_v
-            self.attr_saved["last_measurement"][:2] = m @ self.attr_saved["last_measurement"][:2] + t
+            # If frozen, also need to update the frozen state for OOS
+            if not self.observed and self.attr_saved is not None:
+                self.attr_saved["x"] = big_m @ self.attr_saved["x"]
+                self.attr_saved["x"][:2] += t
+                self.attr_saved["P"] = big_m @ self.attr_saved["P"] @ big_m.T
+                self.attr_saved["last_measurement"][:2] = m @ self.attr_saved["last_measurement"][:2] + t
+                self.attr_saved["last_measurement"][2:] = m @ self.attr_saved["last_measurement"][2:]
+        else:
+            scale = np.linalg.norm(m[:, 0])
+            self.x[:2] = m @ self.x[:2] + t
+            self.x[4:6] = m @ self.x[4:6]
+            # self.x[2] *= scale
+            # self.x[6] *= scale
+
+            self.P[:2, :2] = m @ self.P[:2, :2] @ m.T
+            self.P[4:6, 4:6] = m @ self.P[4:6, 4:6] @ m.T
+            # self.P[2, 2] *= 2 * scale
+            # self.P[6, 6] *= 2 * scale
+
+            # If frozen, also need to update the frozen state for OOS
+            if not self.observed and self.attr_saved is not None:
+                self.attr_saved["x"][:2] = m @ self.attr_saved["x"][:2] + t
+                self.attr_saved["x"][4:6] = m @ self.attr_saved["x"][4:6]
+                # self.attr_saved["x"][2] *= scale
+                # self.attr_saved["x"][6] *= scale
+
+                self.attr_saved["P"][:2, :2] = m @ self.attr_saved["P"][:2, :2] @ m.T
+                self.attr_saved["P"][4:6, 4:6] = m @ self.attr_saved["P"][4:6, 4:6] @ m.T
+                # self.attr_saved["P"][2, 2] *= 2 * scale
+                # self.attr_saved["P"][6, 6] *= 2 * scale
+
+                self.attr_saved["last_measurement"][:2] = m @ self.attr_saved["last_measurement"][:2] + t
+                # self.attr_saved["last_measurement"][2] *= scale
 
     def unfreeze(self):
         if self.attr_saved is not None:
@@ -467,7 +497,6 @@ class KalmanFilterNew(object):
             Optionally provide H to override the measurement function for this
             one call, otherwise self.H will be used.
         """
-
         # set to None to force recompute
         self._log_likelihood = None
         self._likelihood = None
@@ -539,6 +568,17 @@ class KalmanFilterNew(object):
         self.z = deepcopy(z)
         self.x_post = self.x.copy()
         self.P_post = self.P.copy()
+
+    def md_for_measurement(self, z):
+        """Mahalanobis distance for any measurement.
+
+        Should be run after a prediction() call.
+        """
+        z = reshape_z(z, self.dim_z, self.x.ndim)
+        H = self.H
+        y = z - dot(H, self.x)
+        md = sqrt(float(dot(dot(y.T, self.SI), y)))
+        return md
 
     def predict_steadystate(self, u=0, B=None):
         """

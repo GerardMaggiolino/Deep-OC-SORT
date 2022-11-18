@@ -205,6 +205,7 @@ class OCSort(object):
         asso_func="iou",
         inertia=0.2,
         use_byte=False,
+        **kwargs
     ):
         """
         Sets key parameters for SORT
@@ -224,7 +225,7 @@ class OCSort(object):
     def dump_cache(self):
         pass
 
-    def update(self, output_results, img_info, img_size, img=None, tag=None):
+    def update(self, output_results, img_tensor, img_numpy, tag=None):
         """
         Params:
           dets - a numpy array of detections in the format [[x1,y1,x2,y2,score],[x1,y1,x2,y2,score],...]
@@ -247,8 +248,7 @@ class OCSort(object):
             output_results = output_results
             scores = output_results[:, 4] * output_results[:, 5]
             bboxes = output_results[:, :4]  # x1y1x2y2
-        img_h, img_w = img_info[0], img_info[1]
-        scale = min(img_size[0] / float(img_h), img_size[1] / float(img_w))
+        scale = min(img_tensor.shape[2] / img_numpy.shape[1], img_tensor.shape[3] / img_numpy.shape[2])
         bboxes /= scale
         dets = np.concatenate((bboxes, np.expand_dims(scores, axis=-1)), axis=1)
         inds_low = scores > 0.1
