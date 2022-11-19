@@ -9,14 +9,14 @@ import numpy as np
 import dataset
 import utils
 from external.adaptors import detector
-from trackers import ocsort_embedding as tracker_module
+from trackers import ocsort_tracker as tracker_module
 
 
 def get_main_args():
     parser = tracker_module.args.make_parser()
     parser.add_argument("--dataset", type=str, default="mot17")
     parser.add_argument("--result_folder", type=str, default="results/trackers/")
-    parser.add_argument("--test", action="store_true")
+    parser.add_argument("--test_dataset", action="store_true")
     parser.add_argument("--exp_name", type=str, default="exp1")
     parser.add_argument("--min_box_area", type=float, default=10, help="filter out tiny boxes")
     parser.add_argument(
