@@ -2,6 +2,7 @@ import os
 import pdb
 
 import numpy as np
+from scipy.special import softmax
 
 
 def iou_batch(bboxes1, bboxes2):
@@ -260,8 +261,7 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.3):
 
 
 def compute_aw_max_metric(emb_cost, w_association_emb, bottom=0.5):
-    w_emb = np.ones_like(emb_cost)
-    w_emb *= w_association_emb * 4
+    w_emb = np.full_like(emb_cost, w_association_emb)
 
     for idx in range(emb_cost.shape[0]):
         inds = np.argsort(-emb_cost[idx])
@@ -280,14 +280,6 @@ def compute_aw_max_metric(emb_cost, w_association_emb, bottom=0.5):
         w_emb[:, idj] *= col_weight
 
     return w_emb * emb_cost
-
-
-def compute_aw_kl(emb_cost, w_association_emb):
-    """TODO: Maybe try KL divergence, entropy, etc.
-
-    Requires normalizing to 0, 1 though (softmax)
-    """
-    pass
 
 
 def associate(detections, trackers, iou_threshold, velocities, previous_obs, vdc_weight, emb_cost, w_assoc_emb, aw_off):

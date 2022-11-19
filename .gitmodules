@@ -1,6 +1,3 @@
-[submodule "external/TrackEval"]
-	path = external/TrackEval
-	url = https://github.com/JonathonLuiten/TrackEval.git
 [submodule "external/YOLOX"]
 	path = external/YOLOX
 	url = https://github.com/Megvii-BaseDetection/YOLOX.git

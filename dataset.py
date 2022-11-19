@@ -18,6 +18,8 @@ def get_mot_loader(
         direc = "mot"
     elif dataset == "mot20":
         direc = "MOT20"
+    elif dataset == "dance":
+        direc = "dancetrack"
     else:
         raise RuntimeError("Specify path here.")
 

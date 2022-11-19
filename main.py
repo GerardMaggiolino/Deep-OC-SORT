@@ -46,6 +46,8 @@ def get_main_args():
         args.result_folder = os.path.join(args.result_folder, "MOT17-val")
     elif args.dataset == "mot20":
         args.result_folder = os.path.join(args.result_folder, "MOT20-val")
+    elif args.dataset == "dance":
+        args.result_folder = os.path.join(args.result_folder, "DANCE-val")
     return args
 
 

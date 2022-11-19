@@ -2,8 +2,8 @@
 
 ### TODOs 
 - Move away from submodules. It's difficult to maintain paths and adaptors.
-- Support DanceTrack 
 - Streamline installation.
+- Refactor the Kalman filter. Support batch operations.
 
 ### Installation 
 
@@ -28,11 +28,16 @@ data
 |——————MOT20
 |        └——————train
 |        └——————test
+|——————dancetrack
+|        └——————train
+|        └——————test
+|        └——————val
 ```
 and run:
 ```
 python3 data/tools/convert_mot17_to_coco.py
 python3 data/tools/convert_mot20_to_coco.py
+python3 data/tools/convert_dance_to_coco.py
 ```
 
 
@@ -44,17 +49,35 @@ Set `exp=exp1`
 
 For the baseline, MOT17/20: 
 ```
+# Flags to disable all the new changes 
 python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --dataset mot17
 python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --dataset mot20
+python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --dataset dance
 ```
 
 For the best results so far: 
 ```
-python3 main.py --exp_name $exp --post --new_kf_off --w_assoc_emb 0.75
-python3 main.py --exp_name $exp --post --new_kf_off --w_assoc_emb 0.75 --dataset mot20
+# Flag to disable just the BoT-SORT proposed KF, which reduces performance in OC-SORT
+python3 main.py --exp_name $exp --post --new_kf_off --w_assoc_emb 3
+python3 main.py --exp_name $exp --post --new_kf_off --w_assoc_emb 3 --dataset mot20
+python3 main.py --exp_name $exp --post --new_kf_off --w_assoc_emb 3 --dataset dance
 ```
 
-This will create results at `results/trackers/MOT<17/20>-val/$exp`.
+This will create results at: 
+```
+# For the standard results
+results/trackers/MOT<17/20>-val/$exp.
+# For the results with linear interpolation
+results/trackers/MOT<17/20>-val/${exp}_post.
+```
+Results are as follows:  
+```
+MOT17-val       68.49
+MOT17-val-post  70.56
+MOT20-val
+```
+
+
 
 To run TrackEval for HOTA, on this new results, run: 
 ```bash
