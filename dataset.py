@@ -1,4 +1,5 @@
 import os
+import pdb
 
 import torch
 import cv2
@@ -16,10 +17,14 @@ def get_mot_loader(
 ):
     if dataset == "mot17":
         direc = "mot"
+        name = "train"
     elif dataset == "mot20":
         direc = "MOT20"
+        name = "train"
     elif dataset == "dance":
         direc = "dancetrack"
+        annotation = "val.json"
+        name = "val"
     else:
         raise RuntimeError("Specify path here.")
 
@@ -27,6 +32,7 @@ def get_mot_loader(
         data_dir=os.path.join(data_dir, direc),
         json_file=annotation,
         img_size=size,
+        name=name,
         preproc=ValTransform(
             rgb_means=(0.485, 0.456, 0.406),
             std=(0.229, 0.224, 0.225),

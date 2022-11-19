@@ -72,9 +72,12 @@ results/trackers/MOT<17/20>-val/${exp}_post.
 ```
 Results are as follows:  
 ```
+# With the YOLOX MOT17 half-val ablation model
 MOT17-val       68.49
 MOT17-val-post  70.56
-MOT20-val
+# With the YOLOX MOT17 test model
+MOT20-val       53.97
+MOT20-val-post  56.84
 ```
 
 

@@ -1,6 +1,7 @@
 #exp="1114_baseline"
 #python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off
 #python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --dataset mot20
+#python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --dataset dance
 
 #exp="1114_kf"
 #python3 main.py --exp_name $exp --post --cmc_off --aw_off --emb_off

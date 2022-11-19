@@ -16,6 +16,7 @@ def get_main_args():
     parser = tracker_module.args.make_parser()
     parser.add_argument("--dataset", type=str, default="mot17")
     parser.add_argument("--result_folder", type=str, default="results/trackers/")
+    parser.add_argument("--test", action="store_true")
     parser.add_argument("--exp_name", type=str, default="exp1")
     parser.add_argument("--min_box_area", type=float, default=10, help="filter out tiny boxes")
     parser.add_argument(
@@ -60,6 +61,8 @@ def main():
     elif args.dataset == "mot20":
         # TODO: Just use the mot17 test model as the ablation model for 20
         detector_path = "external/weights/bytetrack_x_mot17.pth.tar"
+    elif args.dataset == "dance":
+        detector_path = "external/weights/ocsort_dance_model.pth.tar"
     else:
         raise RuntimeError("Need to update paths for detector for extra datasets.")
     det = detector.Detector("yolox", detector_path)
