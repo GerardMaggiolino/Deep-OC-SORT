@@ -1,8 +1,13 @@
-import torch
+import sys
+import os
 
-from fast_reid.fastreid.config import get_cfg
-from fast_reid.fastreid.modeling.meta_arch import build_model
-from fast_reid.fastreid.utils.checkpoint import Checkpointer
+path = os.path.join(os.getcwd(), "external/")
+sys.path.append(path)
+
+import torch
+from external.fast_reid.fastreid.config import get_cfg
+from external.fast_reid import modeling
+from external.fast_reid.fastreid.utils.checkpoint import Checkpointer
 
 
 def setup_cfg(config_file, opts):
@@ -17,18 +22,23 @@ def setup_cfg(config_file, opts):
     return cfg
 
 
-class FastReID(torch.nn.Module):
+class FastReIDInferenceAdaptor(torch.nn.Module):
     def __init__(self, weights_path):
         super().__init__()
-        config_file ="external/fast_reid/configs/MOT17/sbs_S50.yml"
+        config_file = "external/fast_reid/configs/Base-SBS.yml"
         self.cfg = setup_cfg(config_file, ['MODEL.WEIGHTS', weights_path])
-        self.model = build_model(self.cfg)
-        self.model.eval()
-        self.model.cuda()
 
+        self.model = modeling.build_model(self.cfg)
         Checkpointer(self.model).load(weights_path)
+        self.model = self.model.eval()
+
         self.pH, self.pW = self.cfg.INPUT.SIZE_TEST
+        print(self.pH, self.pW)
 
     def forward(self, batch):
         with torch.no_grad():
             return self.model(batch)
+
+# m = FastReIDInferenceAdaptor("external/weights/mot17_sbs_S50.pth")
+# m.cuda()
+

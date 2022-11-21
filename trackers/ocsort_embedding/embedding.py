@@ -15,14 +15,22 @@ class EmbeddingComputer:
     def __init__(self):
         self.model = None
         self.crop_size = (256, 128)
-        os.makedirs("./cache", exist_ok=True)
-        self.cache_path = "./cache/embedding_ocsort.pkl"
+        os.makedirs("./cache/embeddings/", exist_ok=True)
+        self.cache_path = "./cache/embeddings/{}_embedding.pkl"
         self.cache = {}
-        if os.path.exists(self.cache_path):
-            with open(self.cache_path, "rb") as fp:
+        self.cache_name = ""
+
+    def load_cache(self, path):
+        self.cache_name = path
+        cache_path = self.cache_path.format(path)
+        if os.path.exists(cache_path):
+            with open(cache_path, "rb") as fp:
                 self.cache = pickle.load(fp)
 
     def compute_embedding(self, img, bbox, tag):
+        if self.cache_name != tag.split(":")[0]:
+            self.load_cache(tag.split(":")[0])
+
         if tag in self.cache:
             embs = self.cache[tag]
             if embs.shape[0] != bbox.shape[0]:
@@ -76,5 +84,6 @@ class EmbeddingComputer:
         self.model = model
 
     def dump_cache(self):
-        with open(self.cache_path, "wb") as fp:
-            pickle.dump(self.cache, fp)
+        if self.cache_name:
+            with open(self.cache_path.format(self.cache_name), "wb") as fp:
+                pickle.dump(self.cache, fp)

@@ -9,7 +9,7 @@ import numpy as np
 import dataset
 import utils
 from external.adaptors import detector
-from trackers import ocsort_tracker as tracker_module
+from trackers import ocsort_embedding as tracker_module
 
 
 def get_main_args():
@@ -62,7 +62,7 @@ def main():
         # TODO: Just use the mot17 test model as the ablation model for 20
         detector_path = "external/weights/bytetrack_x_mot17.pth.tar"
     elif args.dataset == "dance":
-        detector_path = "external/weights/ocsort_dance_model.pth.tar"
+        detector_path = "external/weights/bytetrack_dance_model.pth.tar"
     else:
         raise RuntimeError("Need to update paths for detector for extra datasets.")
     det = detector.Detector("yolox", detector_path)
