@@ -27,6 +27,61 @@ class EmbeddingComputer:
             with open(cache_path, "rb") as fp:
                 self.cache = pickle.load(fp)
 
+    def get_horizontal_split_patches(image, bbox, patch_shape, img_info):
+
+        bbox = np.array(bbox)
+
+        bbox = bbox.astype(np.int)
+
+        if (
+            bbox[0] < 0
+            or bbox[1] < 0
+            or bbox[2] > image.shape[1]
+            or bbox[3] > image.shape[0]
+        ):
+
+            print("FAULTY PATCH $$$ - ", bbox)
+            bbox[0] = np.clip(bbox[0], 0, None)
+            bbox[1] = np.clip(bbox[1], 0, None)
+            bbox[2] = np.clip(bbox[2], 0, image.shape[1])
+            bbox[3] = np.clip(bbox[3], 0, image.shape[0])
+            print("FIXED PATCH $$$ - ", bbox)
+
+        x1, y1, x2, y2 = bbox
+
+        w = x2 - x1
+        h = y2 - y1
+
+        ### TODO - Write a generalized split logic
+
+        split_boxes = [
+            [x1, y1, x1 + w, y1 + h / 3],
+            [x1, y1 + h / 3, x1 + w, y1 + (2 / 3) * h],
+            [x1, y1 + (2 / 3) * h, x1 + w, y1 + h],
+        ]
+
+        split_boxes = np.array(split_boxes, dtype="int")
+
+        patches = []
+        for b in split_boxes:
+            sx, sy, ex, ey = b
+            im1 = image[sy:ey, sx:ex]
+
+            # print("BOX ", b)
+            # print("Image ", image.shape)
+
+            dirs = "./VIZ/{}".format(img_info[4][0].split(".")[0])
+            # Path(dirs).mkdir(parents=True, exist_ok=True)
+            # cv2.imwrite(os.path.join(dirs, "{}.png".format(idx)), image)
+
+            im1 = cv2.resize(im1, tuple(patch_shape[::-1]))
+            patches.append(im1)
+
+        patches = np.array(patches)
+        print("ALL SPLIT PATCHES SHAPE - ", patches.shape)
+
+        return patches
+
     def compute_embedding(self, img, bbox, tag):
         if self.cache_name != tag.split(":")[0]:
             self.load_cache(tag.split(":")[0])
@@ -71,7 +126,9 @@ class EmbeddingComputer:
         return embs
 
     def initialize_model(self):
-        model = torchreid.models.build_model(name="osnet_ain_x1_0", num_classes=2510, loss="softmax", pretrained=False)
+        model = torchreid.models.build_model(
+            name="osnet_ain_x1_0", num_classes=2510, loss="softmax", pretrained=False
+        )
         sd = torch.load("external/weights/osnet_ain_ms_d_c.pth.tar")["state_dict"]
         new_state_dict = OrderedDict()
         for k, v in sd.items():
