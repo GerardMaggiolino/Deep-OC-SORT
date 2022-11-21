@@ -265,6 +265,9 @@ def compute_aw_max_metric(emb_cost, w_association_emb, bottom=0.5):
 
     for idx in range(emb_cost.shape[0]):
         inds = np.argsort(-emb_cost[idx])
+        # If there's less than two matches, just keep original weight
+        if len(inds) < 2:
+            continue
         if emb_cost[idx, inds[0]] == 0:
             row_weight = 0
         else:
@@ -273,6 +276,9 @@ def compute_aw_max_metric(emb_cost, w_association_emb, bottom=0.5):
 
     for idj in range(emb_cost.shape[1]):
         inds = np.argsort(-emb_cost[:, idj])
+        # If there's less than two matches, just keep original weight
+        if len(inds) < 2:
+            continue
         if emb_cost[inds[0], idj] == 0:
             col_weight = 0
         else:
