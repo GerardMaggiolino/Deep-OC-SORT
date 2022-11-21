@@ -50,12 +50,17 @@ def dti(txt_path, save_path, n_min=30, n_dti=20):
                 frame_id = int(frame_data[0])
                 track_id = int(frame_data[1])
                 x1, y1, w, h = frame_data[2:6]
-                line = save_format.format(frame=frame_id, id=track_id, x1=x1, y1=y1, w=w, h=h, s=-1)
+                line = save_format.format(
+                    frame=frame_id, id=track_id, x1=x1, y1=y1, w=w, h=h, s=-1
+                )
                 f.write(line)
 
     seq_txts = sorted(glob.glob(os.path.join(txt_path, "*.txt")))
+    # breakpoint()
     for seq_txt in seq_txts:
-        seq_name = seq_txt.split("/")[-1]
+        seq_name = seq_txt.replace("\\", "/").split("/")[
+            -1
+        ]  ## To better play along with windows paths
         seq_data = np.loadtxt(seq_txt, dtype=np.float64, delimiter=",")
         min_id = int(np.min(seq_data[:, 1]))
         max_id = int(np.max(seq_data[:, 1]))
@@ -84,9 +89,9 @@ def dti(txt_path, save_path, n_min=30, n_dti=20):
                         left_bbox = tracklet[i - 1, 2:6]
                         for j in range(1, num_bi + 1):
                             curr_frame = j + left_frame
-                            curr_bbox = (curr_frame - left_frame) * (right_bbox - left_bbox) / (
-                                right_frame - left_frame
-                            ) + left_bbox
+                            curr_bbox = (curr_frame - left_frame) * (
+                                right_bbox - left_bbox
+                            ) / (right_frame - left_frame) + left_bbox
                             frames_dti[curr_frame] = curr_bbox
                 num_dti = len(frames_dti.keys())
                 if num_dti > 0:
