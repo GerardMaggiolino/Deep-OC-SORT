@@ -9,6 +9,8 @@ import torchreid
 import numpy as np
 
 from external.adaptors.fastreid_adaptor import FastReID
+import cv2
+from pathlib import Path
 
 
 class EmbeddingComputer:
@@ -27,25 +29,19 @@ class EmbeddingComputer:
             with open(cache_path, "rb") as fp:
                 self.cache = pickle.load(fp)
 
-    def get_horizontal_split_patches(image, bbox, patch_shape, img_info):
+    def get_horizontal_split_patches(self, image, bbox, tag, idx):
 
         bbox = np.array(bbox)
 
         bbox = bbox.astype(np.int)
 
-        if (
-            bbox[0] < 0
-            or bbox[1] < 0
-            or bbox[2] > image.shape[1]
-            or bbox[3] > image.shape[0]
-        ):
+        if bbox[0] < 0 or bbox[1] < 0 or bbox[2] > image.shape[3] or bbox[3] > image.shape[2]:
 
-            print("FAULTY PATCH $$$ - ", bbox)
+            # Faulty Patch Correction
             bbox[0] = np.clip(bbox[0], 0, None)
             bbox[1] = np.clip(bbox[1], 0, None)
-            bbox[2] = np.clip(bbox[2], 0, image.shape[1])
-            bbox[3] = np.clip(bbox[3], 0, image.shape[0])
-            print("FIXED PATCH $$$ - ", bbox)
+            bbox[2] = np.clip(bbox[2], 0, image.shape[3])
+            bbox[3] = np.clip(bbox[3], 0, image.shape[2])
 
         x1, y1, x2, y2 = bbox
 
@@ -63,22 +59,33 @@ class EmbeddingComputer:
         split_boxes = np.array(split_boxes, dtype="int")
 
         patches = []
-        for b in split_boxes:
-            sx, sy, ex, ey = b
-            im1 = image[sy:ey, sx:ex]
+        # breakpoint()
+        for ix, patch_coords in enumerate(split_boxes):
 
-            # print("BOX ", b)
-            # print("Image ", image.shape)
+            # print(patch_coords)
+            im1 = image[
+                :, :, patch_coords[1] : patch_coords[3], patch_coords[0] : patch_coords[2],
+            ]
 
-            dirs = "./VIZ/{}".format(img_info[4][0].split(".")[0])
-            # Path(dirs).mkdir(parents=True, exist_ok=True)
-            # cv2.imwrite(os.path.join(dirs, "{}.png".format(idx)), image)
+            dirs = "./viz/{}/{}".format(tag.split(":")[0], tag.split(":")[1])
+            Path(dirs).mkdir(parents=True, exist_ok=True)
+            # print(im1.squeeze(0).permute(1, 2, 0).detach().cpu().numpy().shape)
+            cv2.imwrite(
+                os.path.join(dirs, "{}_{}.png".format(idx, ix)), im1.squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255,
+            )
 
-            im1 = cv2.resize(im1, tuple(patch_shape[::-1]))
-            patches.append(im1)
+            try:
+                patch = torchvision.transforms.functional.resize(im1, self.crop_size)
+                patches.append(patch)
+            except:
+                print("Error generating crop for EmbeddingComputer")
+                patches.append(torch.randn(3, *self.crop_size).cuda())
 
-        patches = np.array(patches)
-        print("ALL SPLIT PATCHES SHAPE - ", patches.shape)
+            # im1 = cv2.resize(im1, tuple(patch_shape[::-1]))
+            # patches.append(im1)
+        patches = torch.cat(patches, dim=0)
+        # patches = np.array(patches)
+        # print("ALL SPLIT PATCHES SHAPE - ", patches.shape)
 
         return patches
 
@@ -98,22 +105,32 @@ class EmbeddingComputer:
         if self.model is None:
             self.initialize_model()
 
-        # Make sure bbox is within image frame
-        results = np.round(bbox).astype(np.int32)
-        results[:, 0] = results[:, 0].clip(0, img.shape[3])
-        results[:, 1] = results[:, 1].clip(0, img.shape[2])
-        results[:, 2] = results[:, 2].clip(0, img.shape[3])
-        results[:, 3] = results[:, 3].clip(0, img.shape[2])
-        # Generate all the crops
+        # crops = self.get_horizontal_split_patches(img, bbox, tag)
+
+        # # Make sure bbox is within image frame
+        # breakpoint()
+        # results = np.round(bbox).astype(np.int32)
+        # results[:, 0] = results[:, 0].clip(0, img.shape[3])
+        # results[:, 1] = results[:, 1].clip(0, img.shape[2])
+        # results[:, 2] = results[:, 2].clip(0, img.shape[3])
+        # results[:, 3] = results[:, 3].clip(0, img.shape[2])
+        # # Generate all the crops
+        # crops = []
+        # for p in results:
+        #     crop = img[:, :, p[1] : p[3], p[0] : p[2]]
+        #     try:
+        #         crop = torchvision.transforms.functional.resize(crop, self.crop_size)
+        #         crops.append(crop)
+        #     except:
+        #         print("Error generating crop for EmbeddingComputer")
+        #         crops.append(torch.randn(3, *self.crop_size).cuda())
+
         crops = []
-        for p in results:
-            crop = img[:, :, p[1] : p[3], p[0] : p[2]]
-            try:
-                crop = torchvision.transforms.functional.resize(crop, self.crop_size)
-                crops.append(crop)
-            except:
-                print("Error generating crop for EmbeddingComputer")
-                crops.append(torch.randn(3, *self.crop_size).cuda())
+        # breakpoint()
+        for idx, box in enumerate(bbox):
+            crop = self.get_horizontal_split_patches(img, box, tag, idx)
+            crops.append(crop)
+
         crops = torch.cat(crops, dim=0)
 
         # Create embeddings and l2 normalize them
@@ -126,9 +143,7 @@ class EmbeddingComputer:
         return embs
 
     def initialize_model(self):
-        model = torchreid.models.build_model(
-            name="osnet_ain_x1_0", num_classes=2510, loss="softmax", pretrained=False
-        )
+        model = torchreid.models.build_model(name="osnet_ain_x1_0", num_classes=2510, loss="softmax", pretrained=False)
         sd = torch.load("external/weights/osnet_ain_ms_d_c.pth.tar")["state_dict"]
         new_state_dict = OrderedDict()
         for k, v in sd.items():
