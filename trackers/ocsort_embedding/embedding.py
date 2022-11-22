@@ -14,13 +14,14 @@ from pathlib import Path
 
 
 class EmbeddingComputer:
-    def __init__(self):
+    def __init__(self, grid_off):
         self.model = None
         self.crop_size = (256, 128)
         os.makedirs("./cache/embeddings/", exist_ok=True)
         self.cache_path = "./cache/embeddings/{}_embedding.pkl"
         self.cache = {}
         self.cache_name = ""
+        self.grid_off = grid_off
 
     def load_cache(self, path):
         self.cache_name = path
@@ -29,7 +30,7 @@ class EmbeddingComputer:
             with open(cache_path, "rb") as fp:
                 self.cache = pickle.load(fp)
 
-    def get_horizontal_split_patches(self, image, bbox, tag, idx):
+    def get_horizontal_split_patches(self, image, bbox, tag, idx, viz=False):
 
         bbox = np.array(bbox)
 
@@ -67,12 +68,12 @@ class EmbeddingComputer:
                 :, :, patch_coords[1] : patch_coords[3], patch_coords[0] : patch_coords[2],
             ]
 
-            dirs = "./viz/{}/{}".format(tag.split(":")[0], tag.split(":")[1])
-            Path(dirs).mkdir(parents=True, exist_ok=True)
-            # print(im1.squeeze(0).permute(1, 2, 0).detach().cpu().numpy().shape)
-            cv2.imwrite(
-                os.path.join(dirs, "{}_{}.png".format(idx, ix)), im1.squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255,
-            )
+            if viz:
+                dirs = "./viz/{}/{}".format(tag.split(":")[0], tag.split(":")[1])
+                Path(dirs).mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(
+                    os.path.join(dirs, "{}_{}.png".format(idx, ix)), im1.squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255,
+                )
 
             try:
                 patch = torchvision.transforms.functional.resize(im1, self.crop_size)
@@ -84,6 +85,7 @@ class EmbeddingComputer:
             # im1 = cv2.resize(im1, tuple(patch_shape[::-1]))
             # patches.append(im1)
         patches = torch.cat(patches, dim=0)
+        # print("Patches shape ", patches.shape)
         # patches = np.array(patches)
         # print("ALL SPLIT PATCHES SHAPE - ", patches.shape)
 
@@ -105,31 +107,32 @@ class EmbeddingComputer:
         if self.model is None:
             self.initialize_model()
 
-        # crops = self.get_horizontal_split_patches(img, bbox, tag)
-
-        # # Make sure bbox is within image frame
-        # breakpoint()
-        # results = np.round(bbox).astype(np.int32)
-        # results[:, 0] = results[:, 0].clip(0, img.shape[3])
-        # results[:, 1] = results[:, 1].clip(0, img.shape[2])
-        # results[:, 2] = results[:, 2].clip(0, img.shape[3])
-        # results[:, 3] = results[:, 3].clip(0, img.shape[2])
-        # # Generate all the crops
-        # crops = []
-        # for p in results:
-        #     crop = img[:, :, p[1] : p[3], p[0] : p[2]]
-        #     try:
-        #         crop = torchvision.transforms.functional.resize(crop, self.crop_size)
-        #         crops.append(crop)
-        #     except:
-        #         print("Error generating crop for EmbeddingComputer")
-        #         crops.append(torch.randn(3, *self.crop_size).cuda())
-
         crops = []
-        # breakpoint()
-        for idx, box in enumerate(bbox):
-            crop = self.get_horizontal_split_patches(img, box, tag, idx)
-            crops.append(crop)
+
+        # Make sure bbox is within image frame
+        if self.grid_off:
+            results = np.round(bbox).astype(np.int32)
+            results[:, 0] = results[:, 0].clip(0, img.shape[3])
+            results[:, 1] = results[:, 1].clip(0, img.shape[2])
+            results[:, 2] = results[:, 2].clip(0, img.shape[3])
+            results[:, 3] = results[:, 3].clip(0, img.shape[2])
+            # Generate all the crops
+
+            for p in results:
+                crop = img[:, :, p[1] : p[3], p[0] : p[2]]
+                try:
+                    crop = torchvision.transforms.functional.resize(crop, self.crop_size)
+                    crops.append(crop)
+                except:
+                    print("Error generating crop for EmbeddingComputer")
+                    crops.append(torch.randn(3, *self.crop_size).cuda())
+
+        else:
+
+            # breakpoint()
+            for idx, box in enumerate(bbox):
+                crop = self.get_horizontal_split_patches(img, box, tag, idx)
+                crops.append(crop)
 
         crops = torch.cat(crops, dim=0)
 
@@ -137,6 +140,8 @@ class EmbeddingComputer:
         with torch.no_grad():
             embs = self.model(crops)
         embs = torch.nn.functional.normalize(embs)
+        if not self.grid_off:
+            embs = embs.reshape(bbox.shape[0], -1, embs.shape[-1])  ## TODO - Test for possible error
         embs = embs.cpu().numpy()
 
         self.cache[tag] = embs

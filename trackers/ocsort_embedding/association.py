@@ -3,6 +3,7 @@ import pdb
 
 import numpy as np
 from scipy.special import softmax
+import scipy.spatial as sp
 
 
 def iou_batch(bboxes1, bboxes2):
@@ -271,9 +272,7 @@ def compute_aw_max_metric(emb_cost, w_association_emb, bottom=0.5):
         if emb_cost[idx, inds[0]] == 0:
             row_weight = 0
         else:
-            row_weight = 1 - max(
-                (emb_cost[idx, inds[1]] / emb_cost[idx, inds[0]]) - bottom, 0
-            ) / (1 - bottom)
+            row_weight = 1 - max((emb_cost[idx, inds[1]] / emb_cost[idx, inds[0]]) - bottom, 0) / (1 - bottom)
         w_emb[idx] *= row_weight
 
     for idj in range(emb_cost.shape[1]):
@@ -284,24 +283,35 @@ def compute_aw_max_metric(emb_cost, w_association_emb, bottom=0.5):
         if emb_cost[inds[0], idj] == 0:
             col_weight = 0
         else:
-            col_weight = 1 - max(
-                (emb_cost[inds[1], idj] / emb_cost[inds[0], idj]) - bottom, 0
-            ) / (1 - bottom)
+            col_weight = 1 - max((emb_cost[inds[1], idj] / emb_cost[inds[0], idj]) - bottom, 0) / (1 - bottom)
         w_emb[:, idj] *= col_weight
 
     return w_emb * emb_cost
 
 
+def split_cosine_dist(dets, trks, affinity_thresh=0.3, pair_diff_thresh=0.6, hard_thresh=True):
+
+    cos_dist = np.zeros((len(dets), len(trks)))
+
+    for i in range(len(dets)):
+        for j in range(len(trks)):
+
+            cos_d = 1 - sp.distance.cdist(dets[i], trks[j], "cosine")  ## shape = 3x3
+            patch_affinity = np.max(cos_d, axis=0)  ## shape = [3,]
+            # exp16 - Using Hard threshold
+            if hard_thresh:
+                if len(np.where(patch_affinity > affinity_thresh)[0]) != len(patch_affinity):
+                    cos_dist[i, j] = 0
+                else:
+                    cos_dist[i, j] = np.max(patch_affinity)
+            else:
+                cos_dist[i, j] = np.max(patch_affinity)  # can experiment with mean too (max works slightly better)
+
+    return cos_dist
+
+
 def associate(
-    detections,
-    trackers,
-    iou_threshold,
-    velocities,
-    previous_obs,
-    vdc_weight,
-    emb_cost,
-    w_assoc_emb,
-    aw_off,
+    detections, trackers, det_embs, trk_embs, iou_threshold, velocities, previous_obs, vdc_weight, w_assoc_emb, aw_off, emb_off, grid_off
 ):
     if len(trackers) == 0:
         return (
@@ -330,6 +340,16 @@ def associate(
     angle_diff_cost = (valid_mask * diff_angle) * vdc_weight
     angle_diff_cost = angle_diff_cost.T
     angle_diff_cost = angle_diff_cost * scores
+
+    if not grid_off:
+        emb_cost = split_cosine_dist(det_embs, trk_embs)
+    else:
+        emb_cost = None if trk_embs.shape[0] == 0 else det_embs @ trk_embs.T
+
+    if emb_off:
+        emb_cost = None
+
+    # print("EMB COST - ", emb_cost)
 
     if min(iou_matrix.shape) > 0:
         a = (iou_matrix > iou_threshold).astype(np.int32)
@@ -375,9 +395,7 @@ def associate(
     return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
 
 
-def associate_kitti(
-    detections, trackers, det_cates, iou_threshold, velocities, previous_obs, vdc_weight
-):
+def associate_kitti(detections, trackers, det_cates, iou_threshold, velocities, previous_obs, vdc_weight):
     if len(trackers) == 0:
         return (
             np.empty((0, 2), dtype=int),
