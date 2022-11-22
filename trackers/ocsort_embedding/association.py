@@ -155,7 +155,7 @@ def ciou_batch(bboxes1, bboxes2):
     h2 = h2 + 1.0
     h1 = h1 + 1.0
     arctan = np.arctan(w2 / h2) - np.arctan(w1 / h1)
-    v = (4 / (np.pi**2)) * (arctan**2)
+    v = (4 / (np.pi ** 2)) * (arctan ** 2)
     S = 1 - iou
     alpha = v / (S + v)
     ciou = iou - inner_diag / outer_diag - alpha * v
@@ -193,7 +193,7 @@ def speed_direction_batch(dets, tracks):
     CX2, CY2 = (tracks[:, 0] + tracks[:, 2]) / 2.0, (tracks[:, 1] + tracks[:, 3]) / 2.0
     dx = CX1 - CX2
     dy = CY1 - CY2
-    norm = np.sqrt(dx**2 + dy**2) + 1e-6
+    norm = np.sqrt(dx ** 2 + dy ** 2) + 1e-6
     dx = dx / norm
     dy = dy / norm
     return dy, dx  # size: num_track x num_det
@@ -271,7 +271,9 @@ def compute_aw_max_metric(emb_cost, w_association_emb, bottom=0.5):
         if emb_cost[idx, inds[0]] == 0:
             row_weight = 0
         else:
-            row_weight = 1 - max((emb_cost[idx, inds[1]] / emb_cost[idx, inds[0]]) - bottom, 0) / (1 - bottom)
+            row_weight = 1 - max(
+                (emb_cost[idx, inds[1]] / emb_cost[idx, inds[0]]) - bottom, 0
+            ) / (1 - bottom)
         w_emb[idx] *= row_weight
 
     for idj in range(emb_cost.shape[1]):
@@ -282,13 +284,25 @@ def compute_aw_max_metric(emb_cost, w_association_emb, bottom=0.5):
         if emb_cost[inds[0], idj] == 0:
             col_weight = 0
         else:
-            col_weight = 1 - max((emb_cost[inds[1], idj] / emb_cost[inds[0], idj]) - bottom, 0) / (1 - bottom)
+            col_weight = 1 - max(
+                (emb_cost[inds[1], idj] / emb_cost[inds[0], idj]) - bottom, 0
+            ) / (1 - bottom)
         w_emb[:, idj] *= col_weight
 
     return w_emb * emb_cost
 
 
-def associate(detections, trackers, iou_threshold, velocities, previous_obs, vdc_weight, emb_cost, w_assoc_emb, aw_off):
+def associate(
+    detections,
+    trackers,
+    iou_threshold,
+    velocities,
+    previous_obs,
+    vdc_weight,
+    emb_cost,
+    w_assoc_emb,
+    aw_off,
+):
     if len(trackers) == 0:
         return (
             np.empty((0, 2), dtype=int),
@@ -325,7 +339,9 @@ def associate(detections, trackers, iou_threshold, velocities, previous_obs, vdc
             if emb_cost is None:
                 emb_cost = 0
             else:
-                emb_cost[iou_matrix <= 0] = 0
+                pass
+                ## might be beneficial to compare with non overlapping objects incase of recovery from long occlusions
+                # emb_cost[iou_matrix <= 0] = 0
             if not aw_off:
                 emb_cost = compute_aw_max_metric(emb_cost, w_assoc_emb)
 
@@ -359,7 +375,9 @@ def associate(detections, trackers, iou_threshold, velocities, previous_obs, vdc
     return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
 
 
-def associate_kitti(detections, trackers, det_cates, iou_threshold, velocities, previous_obs, vdc_weight):
+def associate_kitti(
+    detections, trackers, det_cates, iou_threshold, velocities, previous_obs, vdc_weight
+):
     if len(trackers) == 0:
         return (
             np.empty((0, 2), dtype=int),
