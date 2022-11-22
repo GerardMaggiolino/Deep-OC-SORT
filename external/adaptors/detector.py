@@ -8,14 +8,13 @@ from external.adaptors import yolox_adaptor
 
 
 class Detector(torch.nn.Module):
-    K_MODELS = {"yolox": "external/weights/bytetrack_ablation.pth.tar"}
+    K_MODELS = {"yolox"}
 
-    def __init__(self, model_type, path=None):
+    def __init__(self, model_type, path):
         super().__init__()
         if model_type not in self.K_MODELS:
             raise RuntimeError(f"{model_type} detector not supported")
-        if path is None:
-            path = self.K_MODELS[model_type]
+
         self.model_type = model_type
         self.path = path
         self.model = None

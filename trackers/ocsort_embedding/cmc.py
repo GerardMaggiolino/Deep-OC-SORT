@@ -20,7 +20,7 @@ class CMCComputer:
         self.prev_img = None
         self.prev_desc = None
         self.sparse_flow_param = dict(
-            maxCorners=1000,
+            maxCorners=3000,
             qualityLevel=0.01,
             minDistance=1,
             blockSize=3,
@@ -34,18 +34,31 @@ class CMCComputer:
             self.comp_function = self._affine_sparse_flow
         elif method == "sift":
             self.comp_function = self._affine_sift
+        # Same BoT-SORT CMC arrays
         elif method == "file":
             self.comp_function = self._affine_file
             self.file_affines = {}
             # Maps from tag name to file name
             self.file_names = {}
+
+            # All the ablation file names
             for f_name in os.listdir("./cache/cmc_files/MOT17_ablation/"):
+                # The tag that'll be passed into compute_affine based on image name
                 tag = f_name.replace("GMC-", "").replace(".txt", "") + "-FRCNN"
                 f_name = os.path.join("./cache/cmc_files/MOT17_ablation/", f_name)
                 self.file_names[tag] = f_name
             for f_name in os.listdir("./cache/cmc_files/MOT20_ablation/"):
                 tag = f_name.replace("GMC-", "").replace(".txt", "")
                 f_name = os.path.join("./cache/cmc_files/MOT20_ablation/", f_name)
+                self.file_names[tag] = f_name
+
+            # All the test file names
+            for f_name in os.listdir("./cache/cmc_files/MOTChallenge/"):
+                tag = f_name.replace("GMC-", "").replace(".txt", "") + "-FRCNN"
+                # If it's an ablation one (not test) don't overwrite it
+                if tag in self.file_names:
+                    continue
+                f_name = os.path.join("./cache/cmc_files/MOTChallenge/", f_name)
                 self.file_names[tag] = f_name
 
     def compute_affine(self, img, bbox, tag):

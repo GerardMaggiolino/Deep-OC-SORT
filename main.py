@@ -49,19 +49,28 @@ def get_main_args():
         args.result_folder = os.path.join(args.result_folder, "MOT20-val")
     elif args.dataset == "dance":
         args.result_folder = os.path.join(args.result_folder, "DANCE-val")
+    if args.test_dataset:
+        args.result_folder.replace("-val", "-test")
     return args
 
 
 def main():
     # Set dataset and detector
     args = get_main_args()
-    loader = dataset.get_mot_loader(args.dataset)
+    loader = dataset.get_mot_loader(args.dataset, args.test_dataset)
     if args.dataset == "mot17":
-        detector_path = "external/weights/bytetrack_ablation.pth.tar"
+        if args.test_dataset:
+            detector_path = "external/weights/bytetrack_x_mot17.pth.tar"
+        else:
+            detector_path = "external/weights/bytetrack_ablation.pth.tar"
     elif args.dataset == "mot20":
-        # TODO: Just use the mot17 test model as the ablation model for 20
-        detector_path = "external/weights/bytetrack_x_mot17.pth.tar"
+        if args.test_dataset:
+            detector_path = "external/weights/bytetrack_x_mot20.tar"
+        else:
+            # Just use the mot17 test model as the ablation model for 20
+            detector_path = "external/weights/bytetrack_x_mot17.pth.tar"
     elif args.dataset == "dance":
+        # Same model for test and validation
         detector_path = "external/weights/bytetrack_dance_model.pth.tar"
     else:
         raise RuntimeError("Need to update paths for detector for extra datasets.")
