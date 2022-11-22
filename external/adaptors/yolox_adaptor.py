@@ -23,7 +23,10 @@ class PostModel(nn.Module):
         pred = postprocess(
             raw, self.exp.num_classes, self.exp.test_conf, self.exp.nmsthre
         )[0]
-        return torch.cat((pred[:, :4], (pred[:, 4] * pred[:, 5])[:, None]), dim=1)
+        if pred is not None:
+            return torch.cat((pred[:, :4], (pred[:, 4] * pred[:, 5])[:, None]), dim=1)
+        else:
+            return None
 
 
 def fuse_conv_and_bn(conv, bn):

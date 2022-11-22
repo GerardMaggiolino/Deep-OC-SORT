@@ -385,7 +385,7 @@ class OCSort(object):
         dets = dets[remain_inds]
 
         # Compute embeddings before rescaling
-        if self.embedding_off:
+        if self.embedding_off or dets.shape[0] == 0:
             dets_embs = np.ones((dets.shape[0], 1))
         else:
             # (Ndets x 2048)
@@ -430,9 +430,10 @@ class OCSort(object):
             First round of association
         """
         # (M detections X N tracks, final score)
-        stage1_emb_cost = None if trk_embs.shape[0] == 0 else dets_embs @ trk_embs.T
-        if self.embedding_off:
+        if self.embedding_off or dets.shape[0] == 0 or trk_embs.shape[0] == 0:
             stage1_emb_cost = None
+        else:
+            stage1_emb_cost = dets_embs @ trk_embs.T
         matched, unmatched_dets, unmatched_trks = associate(
             dets,
             trks,

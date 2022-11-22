@@ -46,7 +46,8 @@ class Detector(torch.nn.Module):
         with torch.no_grad():
             batch = batch.half()
             output = self.model(batch)
-        self.cache[tag] = output.cpu()
+        if output is not None:
+            self.cache[tag] = output.cpu()
 
         return output
 

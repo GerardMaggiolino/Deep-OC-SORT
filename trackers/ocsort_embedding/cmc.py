@@ -54,7 +54,9 @@ class CMCComputer:
 
             # All the test file names
             for f_name in os.listdir("./cache/cmc_files/MOTChallenge/"):
-                tag = f_name.replace("GMC-", "").replace(".txt", "") + "-FRCNN"
+                tag = f_name.replace("GMC-", "").replace(".txt", "")
+                if "MOT17" in tag:
+                    tag = tag + "-FRCNN"
                 # If it's an ablation one (not test) don't overwrite it
                 if tag in self.file_names:
                     continue
@@ -66,12 +68,12 @@ class CMCComputer:
         if tag in self.cache:
             A = self.cache[tag]
             return A
-
         mask = np.ones_like(img, dtype=np.uint8)
-        bbox = np.round(bbox).astype(np.int32)
-        bbox[bbox < 0] = 0
-        for bb in bbox:
-            mask[bb[1] : bb[3], bb[0] : bb[2]] = 0
+        if bbox.shape[0] > 0:
+            bbox = np.round(bbox).astype(np.int32)
+            bbox[bbox < 0] = 0
+            for bb in bbox:
+                mask[bb[1] : bb[3], bb[0] : bb[2]] = 0
 
         A = self.comp_function(img, mask, tag)
         self.cache[tag] = A
