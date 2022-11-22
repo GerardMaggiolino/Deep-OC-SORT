@@ -26,21 +26,17 @@ def get_main_args():
         help="threshold for filtering out boxes of which aspect ratio are above the given value.",
     )
     parser.add_argument(
-        "--post",
-        action="store_true",
-        help="run post-processing linear interpolation.",
+        "--post", action="store_true", help="run post-processing linear interpolation.",
     )
     parser.add_argument("--w_assoc_emb", type=float, default=0.75, help="Combine weight for emb cost")
     parser.add_argument(
-        "--alpha_fixed_emb",
-        type=float,
-        default=0.95,
-        help="Alpha fixed for EMA embedding",
+        "--alpha_fixed_emb", type=float, default=0.95, help="Alpha fixed for EMA embedding",
     )
     parser.add_argument("--emb_off", action="store_true")
     parser.add_argument("--cmc_off", action="store_true")
     parser.add_argument("--aw_off", action="store_true")
     parser.add_argument("--new_kf_off", action="store_true")
+    parser.add_argument("--grid_off", action="store_true")
     args = parser.parse_args()
 
     if args.dataset == "mot17":
@@ -80,7 +76,8 @@ def main():
         embedding_off=args.emb_off,
         cmc_off=args.cmc_off,
         aw_off=args.aw_off,
-        new_kf_off=args.new_kf_off
+        new_kf_off=args.new_kf_off,
+        grid_off=args.grid_off,
     )
     tracker = tracker_module.ocsort.OCSort(**oc_sort_args)
     results = {}
@@ -143,13 +140,7 @@ def draw(name, pred, i):
     for s in pred:
         p = np.round(s[:4]).astype(np.int32)
         cv2.putText(
-            img,
-            str(int(round(s[4], 2) * 100)),
-            (p[0] + 20, p[1] + 20),
-            cv2.FONT_HERSHEY_PLAIN,
-            2,
-            (0, 0, 255),
-            thickness=3,
+            img, str(int(round(s[4], 2) * 100)), (p[0] + 20, p[1] + 20), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=3,
         )
     cv2.imwrite(f"debug/{i}.png", img)
 
