@@ -9,21 +9,41 @@ from torchvision import transforms
 
 
 def get_mot_loader(
-    dataset, batch_size=1, workers=4, data_dir="data", annotation="val_half.json", size=(800, 1440),
+    dataset,
+    test,
+    data_dir="data",
+    workers=4,
+    size=(800, 1440),
 ):
+    # Different dataset paths
     if dataset == "mot17":
         direc = "mot"
-        name = "train"
+        if test:
+            name = "test"
+            annotation = "test.json"
+        else:
+            name = "train"
+            annotation = "val_half.json"
     elif dataset == "mot20":
         direc = "MOT20"
-        name = "train"
+        if test:
+            name = "test"
+            annotation = "test.json"
+        else:
+            name = "train"
+            annotation = "val_half.json"
     elif dataset == "dance":
         direc = "dancetrack"
-        annotation = "val.json"
-        name = "val"
+        if test:
+            name = "test"
+            annotation = "test.json"
+        else:
+            annotation = "val.json"
+            name = "val"
     else:
         raise RuntimeError("Specify path here.")
 
+    # Same validation loader for all MOT style datasets
     valdataset = MOTDataset(
         data_dir=os.path.join(data_dir, direc),
         json_file=annotation,
@@ -39,7 +59,7 @@ def get_mot_loader(
         "pin_memory": True,
         "sampler": sampler,
     }
-    dataloader_kwargs["batch_size"] = batch_size
+    dataloader_kwargs["batch_size"] = 1
     val_loader = torch.utils.data.DataLoader(valdataset, **dataloader_kwargs)
 
     return val_loader

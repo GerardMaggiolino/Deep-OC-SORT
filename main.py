@@ -1,6 +1,7 @@
 import pdb
 import os
 import shutil
+import time
 
 import torch
 import cv2
@@ -45,19 +46,28 @@ def get_main_args():
         args.result_folder = os.path.join(args.result_folder, "MOT20-val")
     elif args.dataset == "dance":
         args.result_folder = os.path.join(args.result_folder, "DANCE-val")
+    if args.test_dataset:
+        args.result_folder.replace("-val", "-test")
     return args
 
 
 def main():
     # Set dataset and detector
     args = get_main_args()
-    loader = dataset.get_mot_loader(args.dataset)
+    loader = dataset.get_mot_loader(args.dataset, args.test_dataset)
     if args.dataset == "mot17":
-        detector_path = "external/weights/bytetrack_ablation.pth.tar"
+        if args.test_dataset:
+            detector_path = "external/weights/bytetrack_x_mot17.pth.tar"
+        else:
+            detector_path = "external/weights/bytetrack_ablation.pth.tar"
     elif args.dataset == "mot20":
-        # TODO: Just use the mot17 test model as the ablation model for 20
-        detector_path = "external/weights/bytetrack_x_mot17.pth.tar"
+        if args.test_dataset:
+            detector_path = "external/weights/bytetrack_x_mot20.tar"
+        else:
+            # Just use the mot17 test model as the ablation model for 20
+            detector_path = "external/weights/bytetrack_x_mot17.pth.tar"
     elif args.dataset == "dance":
+        # Same model for test and validation
         detector_path = "external/weights/bytetrack_dance_model.pth.tar"
     else:
         raise RuntimeError("Need to update paths for detector for extra datasets.")
@@ -81,32 +91,45 @@ def main():
     )
     tracker = tracker_module.ocsort.OCSort(**oc_sort_args)
     results = {}
+    frame_count = 0
+    total_time = 0
 
     # See __getitem__ of dataset.MOTDataset
     for (img, np_img), label, info, idx in loader:
         # Frame info
-        img = img.cuda()
         frame_id = info[2].item()
         video_name = info[4][0].split("/")[0]
+        if "FRCNN" not in video_name and args.dataset == "mot17":
+            continue
         tag = f"{video_name}:{frame_id}"
         if video_name not in results:
             results[video_name] = []
+        img = img.cuda()
 
         # Initialize tracker on first frame of a new video
         print(f"Processing {video_name}:{frame_id}\r", end="")
         if frame_id == 1:
             print(f"Initializing tracker for {video_name}")
+            print(f"Time spent: {total_time:.3f}, FPS {frame_count / (total_time + 1e-9):.2f}")
             tracker.dump_cache()
             tracker = tracker_module.ocsort.OCSort(**oc_sort_args)
 
+        start_time = time.time()
+
         # Nx5 of (x1, y1, x2, y2, conf), pass in tag for caching
         pred = det(img, tag)
-
+        if pred is None:
+            continue
         # Nx5 of (x1, y1, x2, y2, ID)
         targets = tracker.update(pred, img, np_img, tag)
         tlwhs, ids = utils.filter_targets(targets, args.aspect_ratio_thresh, args.min_box_area)
+
+        total_time += time.time() - start_time
+        frame_count += 1
+
         results[video_name].append((frame_id, tlwhs, ids))
 
+    print(f"Time spent: {total_time:.3f}, FPS {frame_count / (total_time + 1e-9):.2f}")
     # Save detector results
     det.dump_cache()
     tracker.dump_cache()

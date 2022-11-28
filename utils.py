@@ -2,6 +2,7 @@ import glob
 import os
 
 import numpy as np
+import shutil
 
 
 def write_results_no_score(filename, results):
@@ -107,3 +108,15 @@ def dti(txt_path, save_path, n_min=30, n_dti=20):
         seq_results = seq_results[1:]
         seq_results = seq_results[seq_results[:, 0].argsort()]
         dti_write_results(save_seq_txt, seq_results)
+
+
+if __name__ == "__main__":
+    post_folder = "results/trackers/MOT17-val/1122_final_test_post"
+    pre_folder = "results/trackers/MOT17-val/1122_final_test"
+    if os.path.exists(post_folder):
+        print(f"Overwriting previous results in {post_folder}")
+        shutil.rmtree(post_folder)
+    shutil.copytree(pre_folder, post_folder)
+    post_folder_data = os.path.join(post_folder, "data")
+    dti(post_folder_data, post_folder_data)
+    print(f"Linear interpolation post-processing applied, saved to {post_folder_data}.")

@@ -23,7 +23,10 @@ class PostModel(nn.Module):
         pred = postprocess(
             raw, self.exp.num_classes, self.exp.test_conf, self.exp.nmsthre
         )[0]
-        return torch.cat((pred[:, :4], (pred[:, 4] * pred[:, 5])[:, None]), dim=1)
+        if pred is not None:
+            return torch.cat((pred[:, :4], (pred[:, 4] * pred[:, 5])[:, None]), dim=1)
+        else:
+            return None
 
 
 def fuse_conv_and_bn(conv, bn):
@@ -62,7 +65,6 @@ def fuse_conv_and_bn(conv, bn):
 
 
 def fuse_model(model):
-
     for m in model.modules():
         if type(m) is BaseConv and hasattr(m, "bn"):
             m.conv = fuse_conv_and_bn(m.conv, m.bn)  # update conv
@@ -75,8 +77,8 @@ def get_model(path):
     model = Exp().get_model()
     ckpt = torch.load(path)
     model.load_state_dict(ckpt["model"])
-    with warnings.catch_warnings():
-        model = fuse_model(model)
+    # with warnings.catch_warnings():
+    #    model = fuse_model(model)
     model = PostModel(model)
     model.cuda()
     model.eval()

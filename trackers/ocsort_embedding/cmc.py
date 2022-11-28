@@ -19,14 +19,7 @@ class CMCComputer:
         self.minimum_features = minimum_features
         self.prev_img = None
         self.prev_desc = None
-        self.sparse_flow_param = dict(
-            maxCorners=1000,
-            qualityLevel=0.01,
-            minDistance=1,
-            blockSize=3,
-            useHarrisDetector=False,
-            k=0.04,
-        )
+        self.sparse_flow_param = dict(maxCorners=1000, qualityLevel=0.01, minDistance=1, blockSize=3, useHarrisDetector=False, k=0.04,)
         self.file_computed = {}
 
         self.comp_function = None
