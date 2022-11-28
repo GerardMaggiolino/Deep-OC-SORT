@@ -383,7 +383,6 @@ class KalmanFilterNew(object):
         Save the parameters before non-observation forward
         """
         self.attr_saved = deepcopy(self.__dict__)
-        self.frozen = True
 
     def apply_affine_correction(self, m, t, new_kf):
         """

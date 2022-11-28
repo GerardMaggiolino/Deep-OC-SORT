@@ -3,7 +3,6 @@ import pdb
 
 import numpy as np
 from scipy.special import softmax
-import scipy.spatial as sp
 
 
 def iou_batch(bboxes1, bboxes2):
@@ -156,7 +155,7 @@ def ciou_batch(bboxes1, bboxes2):
     h2 = h2 + 1.0
     h1 = h1 + 1.0
     arctan = np.arctan(w2 / h2) - np.arctan(w1 / h1)
-    v = (4 / (np.pi ** 2)) * (arctan ** 2)
+    v = (4 / (np.pi**2)) * (arctan**2)
     S = 1 - iou
     alpha = v / (S + v)
     ciou = iou - inner_diag / outer_diag - alpha * v
@@ -194,7 +193,7 @@ def speed_direction_batch(dets, tracks):
     CX2, CY2 = (tracks[:, 0] + tracks[:, 2]) / 2.0, (tracks[:, 1] + tracks[:, 3]) / 2.0
     dx = CX1 - CX2
     dy = CY1 - CY2
-    norm = np.sqrt(dx ** 2 + dy ** 2) + 1e-6
+    norm = np.sqrt(dx**2 + dy**2) + 1e-6
     dx = dx / norm
     dy = dy / norm
     return dy, dx  # size: num_track x num_det
@@ -289,30 +288,7 @@ def compute_aw_max_metric(emb_cost, w_association_emb, bottom=0.5):
     return w_emb * emb_cost
 
 
-def split_cosine_dist(dets, trks, affinity_thresh=0.55, pair_diff_thresh=0.6, hard_thresh=True):
-
-    cos_dist = np.zeros((len(dets), len(trks)))
-
-    for i in range(len(dets)):
-        for j in range(len(trks)):
-
-            cos_d = 1 - sp.distance.cdist(dets[i], trks[j], "cosine")  ## shape = 3x3
-            patch_affinity = np.max(cos_d, axis=0)  ## shape = [3,]
-            # exp16 - Using Hard threshold
-            if hard_thresh:
-                if len(np.where(patch_affinity > affinity_thresh)[0]) != len(patch_affinity):
-                    cos_dist[i, j] = 0
-                else:
-                    cos_dist[i, j] = np.max(patch_affinity)
-            else:
-                cos_dist[i, j] = np.max(patch_affinity)  # can experiment with mean too (max works slightly better)
-
-    return cos_dist
-
-
-def associate(
-    detections, trackers, det_embs, trk_embs, iou_threshold, velocities, previous_obs, vdc_weight, w_assoc_emb, aw_off, emb_off, grid_off
-):
+def associate(detections, trackers, iou_threshold, velocities, previous_obs, vdc_weight, emb_cost, w_assoc_emb, aw_off):
     if len(trackers) == 0:
         return (
             np.empty((0, 2), dtype=int),
@@ -341,16 +317,6 @@ def associate(
     angle_diff_cost = angle_diff_cost.T
     angle_diff_cost = angle_diff_cost * scores
 
-    if not grid_off:
-        emb_cost = split_cosine_dist(det_embs, trk_embs)
-    else:
-        emb_cost = None if trk_embs.shape[0] == 0 else det_embs @ trk_embs.T
-
-    if emb_off:
-        emb_cost = None
-
-    # print("EMB COST - ", emb_cost)
-
     if min(iou_matrix.shape) > 0:
         a = (iou_matrix > iou_threshold).astype(np.int32)
         if a.sum(1).max() == 1 and a.sum(0).max() == 1:
@@ -359,11 +325,11 @@ def associate(
             if emb_cost is None:
                 emb_cost = 0
             else:
-                pass
-                ## might be beneficial to compare with non overlapping objects incase of recovery from long occlusions
-                # emb_cost[iou_matrix <= 0] = 0
-            if not aw_off:
-                emb_cost = compute_aw_max_metric(emb_cost, w_assoc_emb)
+                emb_cost[iou_matrix <= 0] = 0
+                if not aw_off:
+                    emb_cost = compute_aw_max_metric(emb_cost, w_assoc_emb)
+                else:
+                    emb_cost *= w_assoc_emb
 
             final_cost = -(iou_matrix + angle_diff_cost + emb_cost)
             matched_indices = linear_assignment(final_cost)
