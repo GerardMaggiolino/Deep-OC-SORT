@@ -1,4 +1,4 @@
-# MOT Capstone
+# Deep-OC-SORT
 
 ### TODOs
 
