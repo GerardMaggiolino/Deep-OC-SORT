@@ -4,6 +4,7 @@ import os
 import pickle
 
 import torch
+import cv2
 import torchvision
 import torchreid
 import numpy as np
@@ -12,9 +13,10 @@ from external.adaptors.fastreid_adaptor import FastReID
 
 
 class EmbeddingComputer:
-    def __init__(self):
+    def __init__(self, dataset):
         self.model = None
-        self.crop_size = (256, 128)
+        self.dataset = dataset
+        self.crop_size = (128, 384)
         os.makedirs("./cache/embeddings/", exist_ok=True)
         self.cache_path = "./cache/embeddings/{}_embedding.pkl"
         self.cache = {}
@@ -27,7 +29,7 @@ class EmbeddingComputer:
             with open(cache_path, "rb") as fp:
                 self.cache = pickle.load(fp)
 
-    def compute_embedding(self, img, bbox, tag):
+    def compute_embedding(self, img, bbox, tag, is_numpy=True):
         if self.cache_name != tag.split(":")[0]:
             self.load_cache(tag.split(":")[0])
 
@@ -44,25 +46,37 @@ class EmbeddingComputer:
             self.initialize_model()
 
         # Make sure bbox is within image frame
+        if is_numpy:
+            h, w = img.shape[:2]
+        else:
+            h, w = img.shape[2:]
         results = np.round(bbox).astype(np.int32)
-        results[:, 0] = results[:, 0].clip(0, img.shape[3])
-        results[:, 1] = results[:, 1].clip(0, img.shape[2])
-        results[:, 2] = results[:, 2].clip(0, img.shape[3])
-        results[:, 3] = results[:, 3].clip(0, img.shape[2])
+        results[:, 0] = results[:, 0].clip(0, w)
+        results[:, 1] = results[:, 1].clip(0, h)
+        results[:, 2] = results[:, 2].clip(0, w)
+        results[:, 3] = results[:, 3].clip(0, h)
+
         # Generate all the crops
         crops = []
         for p in results:
-            crop = img[:, :, p[1] : p[3], p[0] : p[2]]
-            try:
+            if is_numpy:
+                crop = img[p[1]:p[3], p[0]:p[2]]
+                crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+                crop = cv2.resize(crop, self.crop_size, interpolation=cv2.INTER_LINEAR)
+                crop = torch.as_tensor(crop.astype("float32").transpose(2, 0, 1))
+                crop = crop.unsqueeze(0)
+            else:
+                crop = img[:, :, p[1] : p[3], p[0] : p[2]]
                 crop = torchvision.transforms.functional.resize(crop, self.crop_size)
-                crops.append(crop)
-            except:
-                print("Error generating crop for EmbeddingComputer")
-                crops.append(torch.randn(3, *self.crop_size).cuda())
+
+            crops.append(crop)
+
         crops = torch.cat(crops, dim=0)
 
         # Create embeddings and l2 normalize them
         with torch.no_grad():
+            crops = crops.cuda()
+            crops = crops.half()
             embs = self.model(crops)
         embs = torch.nn.functional.normalize(embs)
         embs = embs.cpu().numpy()
@@ -71,6 +85,7 @@ class EmbeddingComputer:
         return embs
 
     def initialize_model(self):
+        """
         model = torchreid.models.build_model(name="osnet_ain_x1_0", num_classes=2510, loss="softmax", pretrained=False)
         sd = torch.load("external/weights/osnet_ain_ms_d_c.pth.tar")["state_dict"]
         new_state_dict = OrderedDict()
@@ -81,6 +96,16 @@ class EmbeddingComputer:
         model.load_state_dict(new_state_dict)
         model.eval()
         model.cuda()
+        """
+        if self.dataset == "mot17":
+            path = "external/weights/mot17_sbs_S50.pth"
+        else:
+            path = "external/weights/mot20_sbs_S50.pth"
+
+        model = FastReID(path)
+        model.eval()
+        model.cuda()
+        model.half()
         self.model = model
 
     def dump_cache(self):

@@ -10,9 +10,9 @@ from yolox.models.network_blocks import BaseConv
 
 
 class PostModel(nn.Module):
-    def __init__(self, model):
+    def __init__(self, model, exp):
         super().__init__()
-        self.exp = Exp()
+        self.exp = exp
         self.model = model
 
     def forward(self, batch):
@@ -29,102 +29,35 @@ class PostModel(nn.Module):
             return None
 
 
-def fuse_conv_and_bn(conv, bn):
-    # Fuse convolution and batchnorm layers https://tehnokv.com/posts/fusing-batchnorm-and-conv/
-    fusedconv = (
-        nn.Conv2d(
-            conv.in_channels,
-            conv.out_channels,
-            kernel_size=conv.kernel_size,
-            stride=conv.stride,
-            padding=conv.padding,
-            groups=conv.groups,
-            bias=True,
-        )
-        .requires_grad_(False)
-        .to(conv.weight.device)
-    )
-
-    # prepare filters
-    w_conv = conv.weight.clone().view(conv.out_channels, -1)
-    w_bn = torch.diag(bn.weight.div(torch.sqrt(bn.eps + bn.running_var)))
-    fusedconv.weight.copy_(torch.mm(w_bn, w_conv).view(fusedconv.weight.shape))
-
-    # prepare spatial bias
-    b_conv = (
-        torch.zeros(conv.weight.size(0), device=conv.weight.device)
-        if conv.bias is None
-        else conv.bias
-    )
-    b_bn = bn.bias - bn.weight.mul(bn.running_mean).div(
-        torch.sqrt(bn.running_var + bn.eps)
-    )
-    fusedconv.bias.copy_(torch.mm(w_bn, b_conv.reshape(-1, 1)).reshape(-1) + b_bn)
-
-    return fusedconv
-
-
-def fuse_model(model):
-    for m in model.modules():
-        if type(m) is BaseConv and hasattr(m, "bn"):
-            m.conv = fuse_conv_and_bn(m.conv, m.bn)  # update conv
-            delattr(m, "bn")  # remove batchnorm
-            m.forward = m.fuseforward  # update forward
-    return model
-
-
-def get_model(path):
-    model = Exp().get_model()
+def get_model(path, dataset):
+    exp = Exp(dataset)
+    model = exp.get_model()
     ckpt = torch.load(path)
     model.load_state_dict(ckpt["model"])
     # with warnings.catch_warnings():
     #    model = fuse_model(model)
-    model = PostModel(model)
+    model = PostModel(model, exp)
     model.cuda()
     model.eval()
     return model
 
 
 class Exp:
-    def __init__(self):
-        # ---------------- model config ---------------- #
-        self.num_classes = 80
-        self.depth = 1.00
-        self.width = 1.00
-        # ---------------- dataloader config ---------------- #
-        # set worker to 4 for shorter dataloader init time
-        self.data_num_workers = 4
-        self.input_size = (640, 640)
-        self.random_size = (14, 26)
-        self.train_ann = "instances_train2017.json"
-        self.val_ann = "instances_val2017.json"
-        # --------------- transform config ----------------- #
-        self.degrees = 10.0
-        self.translate = 0.1
-        self.scale = (0.1, 2)
-        self.mscale = (0.8, 1.6)
-        self.shear = 2.0
-        self.perspective = 0.0
-        self.enable_mixup = True
-        # --------------  training config --------------------- #
-        self.warmup_epochs = 5
-        self.max_epoch = 300
-        self.warmup_lr = 0
-        self.basic_lr_per_img = 0.01 / 64.0
-        self.scheduler = "yoloxwarmcos"
-        self.no_aug_epochs = 15
-        self.min_lr_ratio = 0.05
-        self.ema = True
-        self.weight_decay = 5e-4
-        self.momentum = 0.9
-        self.print_interval = 10
-        self.eval_interval = 10
+    def __init__(self, dataset):
         # -----------------  testing config ------------------ #
         self.num_classes = 1
         self.depth = 1.33
         self.width = 1.25
-        self.input_size = (800, 1440)
-        self.test_size = (800, 1440)
+        if dataset == "mot17" or dataset == "dance":
+            self.input_size = (800, 1440)
+            self.test_size = (800, 1440)
+        elif dataset == "mot20":
+            self.input_size = (896, 1600)
+            self.test_size = (896, 1600)
+        elif dataset == "dancetrack":
+            self.input_size = (896, 1600)
+            self.test_size = (896, 1600)
+
         self.random_size = (18, 32)
         self.max_epoch = 80
         self.print_interval = 20

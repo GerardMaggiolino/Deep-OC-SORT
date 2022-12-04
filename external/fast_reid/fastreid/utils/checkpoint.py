@@ -64,6 +64,7 @@ class Checkpointer(object):
         self.model = model
         self.checkpointables = copy.copy(checkpointables)
         self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.CRITICAL)
         self.save_dir = save_dir
         self.save_to_disk = save_to_disk
 

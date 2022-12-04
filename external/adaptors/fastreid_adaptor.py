@@ -11,16 +11,14 @@ def setup_cfg(config_file, opts):
     cfg.merge_from_file(config_file)
     cfg.merge_from_list(opts)
     cfg.MODEL.BACKBONE.PRETRAIN = False
-
     cfg.freeze()
-
     return cfg
 
 
 class FastReID(torch.nn.Module):
     def __init__(self, weights_path):
         super().__init__()
-        config_file ="external/fast_reid/configs/MOT17/sbs_S50.yml"
+        config_file = "external/fast_reid/configs/MOT17/sbs_S50.yml"
         self.cfg = setup_cfg(config_file, ['MODEL.WEIGHTS', weights_path])
         self.model = build_model(self.cfg)
         self.model.eval()

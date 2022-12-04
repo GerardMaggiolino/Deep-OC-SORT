@@ -13,7 +13,7 @@ def get_mot_loader(
     test,
     data_dir="data",
     workers=4,
-    size=(800, 1440),
+    size=(800, 1440)
 ):
     # Different dataset paths
     if dataset == "mot17":

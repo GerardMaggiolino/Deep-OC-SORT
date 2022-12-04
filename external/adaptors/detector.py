@@ -10,13 +10,14 @@ from external.adaptors import yolox_adaptor
 class Detector(torch.nn.Module):
     K_MODELS = {"yolox"}
 
-    def __init__(self, model_type, path):
+    def __init__(self, model_type, path, dataset):
         super().__init__()
         if model_type not in self.K_MODELS:
             raise RuntimeError(f"{model_type} detector not supported")
 
         self.model_type = model_type
         self.path = path
+        self.dataset = dataset
         self.model = None
 
         os.makedirs("./cache", exist_ok=True)
@@ -33,7 +34,7 @@ class Detector(torch.nn.Module):
     def initialize_model(self):
         """Wait until needed."""
         if self.model_type == "yolox":
-            self.model = yolox_adaptor.get_model(self.path)
+            self.model = yolox_adaptor.get_model(self.path, self.dataset)
         self.model.eval()
         self.model.half()
 

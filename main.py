@@ -36,6 +36,7 @@ def get_main_args():
     parser.add_argument("--emb_off", action="store_true")
     parser.add_argument("--cmc_off", action="store_true")
     parser.add_argument("--aw_off", action="store_true")
+    parser.add_argument("--aw_param", type=float, default=0.5)
     parser.add_argument("--new_kf_off", action="store_true")
     parser.add_argument("--grid_off", action="store_true")
     args = parser.parse_args()
@@ -54,24 +55,29 @@ def get_main_args():
 def main():
     # Set dataset and detector
     args = get_main_args()
-    loader = dataset.get_mot_loader(args.dataset, args.test_dataset)
+
     if args.dataset == "mot17":
         if args.test_dataset:
             detector_path = "external/weights/bytetrack_x_mot17.pth.tar"
         else:
             detector_path = "external/weights/bytetrack_ablation.pth.tar"
+        size = (800, 1440)
     elif args.dataset == "mot20":
         if args.test_dataset:
             detector_path = "external/weights/bytetrack_x_mot20.tar"
+            size = (896, 1600)
         else:
             # Just use the mot17 test model as the ablation model for 20
             detector_path = "external/weights/bytetrack_x_mot17.pth.tar"
+            size = (800, 1440)
     elif args.dataset == "dance":
         # Same model for test and validation
         detector_path = "external/weights/bytetrack_dance_model.pth.tar"
+        size = (800, 1440)
     else:
         raise RuntimeError("Need to update paths for detector for extra datasets.")
-    det = detector.Detector("yolox", detector_path)
+    det = detector.Detector("yolox", detector_path, args.dataset)
+    loader = dataset.get_mot_loader(args.dataset, args.test_dataset, size=size)
 
     # Set up tracker
     oc_sort_args = dict(
@@ -86,6 +92,7 @@ def main():
         embedding_off=args.emb_off,
         cmc_off=args.cmc_off,
         aw_off=args.aw_off,
+        aw_param=args.aw_param,
         new_kf_off=args.new_kf_off,
         grid_off=args.grid_off,
     )
@@ -121,7 +128,7 @@ def main():
         if pred is None:
             continue
         # Nx5 of (x1, y1, x2, y2, ID)
-        targets = tracker.update(pred, img, np_img, tag)
+        targets = tracker.update(pred, img, np_img[0].numpy(), tag)
         tlwhs, ids = utils.filter_targets(targets, args.aspect_ratio_thresh, args.min_box_area)
 
         total_time += time.time() - start_time

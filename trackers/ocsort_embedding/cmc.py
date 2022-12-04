@@ -64,7 +64,7 @@ class CMCComputer:
                 self.file_names[tag] = f_name
 
     def compute_affine(self, img, bbox, tag):
-        img = cv2.cvtColor(img[0].numpy(), cv2.COLOR_BGR2GRAY)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         if tag in self.cache:
             A = self.cache[tag]
             return A

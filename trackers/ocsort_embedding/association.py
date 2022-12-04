@@ -288,7 +288,9 @@ def compute_aw_max_metric(emb_cost, w_association_emb, bottom=0.5):
     return w_emb * emb_cost
 
 
-def associate(detections, trackers, iou_threshold, velocities, previous_obs, vdc_weight, emb_cost, w_assoc_emb, aw_off):
+def associate(
+    detections, trackers, iou_threshold, velocities, previous_obs, vdc_weight, emb_cost, w_assoc_emb, aw_off, aw_param
+):
     if len(trackers) == 0:
         return (
             np.empty((0, 2), dtype=int),
@@ -327,7 +329,7 @@ def associate(detections, trackers, iou_threshold, velocities, previous_obs, vdc
             else:
                 emb_cost[iou_matrix <= 0] = 0
                 if not aw_off:
-                    emb_cost = compute_aw_max_metric(emb_cost, w_assoc_emb)
+                    emb_cost = compute_aw_max_metric(emb_cost, w_assoc_emb, bottom=aw_param)
                 else:
                     emb_cost *= w_assoc_emb
 
@@ -440,4 +442,3 @@ def associate_kitti(detections, trackers, det_cates, iou_threshold, velocities, 
         matches = np.concatenate(matches, axis=0)
 
     return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
-

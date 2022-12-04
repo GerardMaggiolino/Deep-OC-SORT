@@ -78,10 +78,7 @@ def speed_direction(bbox1, bbox2):
 
 def new_kf_process_noise(w, h, p=1 / 20, v=1 / 160):
     Q = np.diag(
-        (
-            (p * w) ** 2, (p * h) ** 2, (p * w) ** 2, (p * h) ** 2,
-            (v * w) ** 2, (v * h) ** 2, (v * w) ** 2, (v * h) ** 2
-        )
+        ((p * w) ** 2, (p * h) ** 2, (p * w) ** 2, (p * h) ** 2, (v * w) ** 2, (v * h) ** 2, (v * w) ** 2, (v * h) ** 2)
     )
     return Q
 
@@ -331,6 +328,7 @@ class OCSort(object):
         inertia=0.2,
         w_association_emb=0.75,
         alpha_fixed_emb=0.95,
+        aw_param=0.5,
         embedding_off=False,
         cmc_off=False,
         aw_off=False,
@@ -351,9 +349,10 @@ class OCSort(object):
         self.inertia = inertia
         self.w_association_emb = w_association_emb
         self.alpha_fixed_emb = alpha_fixed_emb
+        self.aw_param = aw_param
         KalmanBoxTracker.count = 0
 
-        self.embedder = EmbeddingComputer()
+        self.embedder = EmbeddingComputer(kwargs["args"].dataset)
         self.cmc = CMCComputer()
         self.embedding_off = embedding_off
         self.cmc_off = cmc_off
@@ -384,15 +383,17 @@ class OCSort(object):
         remain_inds = scores > self.det_thresh
         dets = dets[remain_inds]
 
-        # Compute embeddings before rescaling
+
+        # Rescale
+        scale = min(img_tensor.shape[2] / img_numpy.shape[0], img_tensor.shape[3] / img_numpy.shape[1])
+        dets[:, :4] /= scale
+
+        # Embedding
         if self.embedding_off or dets.shape[0] == 0:
             dets_embs = np.ones((dets.shape[0], 1))
         else:
             # (Ndets x 2048)
-            dets_embs = self.embedder.compute_embedding(img_tensor, dets[:, :4], tag)
-        # Rescale
-        scale = min(img_tensor.shape[2] / img_numpy.shape[1], img_tensor.shape[3] / img_numpy.shape[2])
-        dets[:, :4] /= scale
+            dets_embs = self.embedder.compute_embedding(img_numpy, dets[:, :4], tag)
 
         # CMC
         if not self.cmc_off:
@@ -443,7 +444,8 @@ class OCSort(object):
             self.inertia,
             stage1_emb_cost,
             self.w_association_emb,
-            self.aw_off
+            self.aw_off,
+            self.aw_param,
         )
         for m in matched:
             self.trackers[m[1]].update(dets[m[0], :])
@@ -638,7 +640,3 @@ class OCSort(object):
     def dump_cache(self):
         self.cmc.dump_cache()
         self.embedder.dump_cache()
-
-
-
-
