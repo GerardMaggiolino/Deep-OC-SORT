@@ -140,8 +140,8 @@ class EmbeddingComputer:
             batch_crops = batch_crops.cuda().half()
             batch_embs = self.model(batch_crops)
             embs.extend(batch_embs)
-        embs = torch.cat(embs, dim=0)
-        embs = torch.nn.functional.normalize(embs)
+        embs = torch.stack(embs)
+        embs = torch.nn.functional.normalize(embs, dim=-1)
 
         if not self.grid_off:
             embs = embs.reshape(bbox.shape[0], -1, embs.shape[-1])
