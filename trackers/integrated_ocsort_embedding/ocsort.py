@@ -368,13 +368,8 @@ class OCSort(object):
         dets = dets[remain_inds]
 
         # Compute embeddings before rescaling
-<<<<<<< HEAD:trackers/integrated_ocsort_embedding/ocsort.py
-        if self.embedding_off:
-            dets_embs = np.ones((dets.shape[0], 1))  #
-=======
         if self.embedding_off or dets.shape[0] == 0:
             dets_embs = np.ones((dets.shape[0], 1))
->>>>>>> d65c0e6c4b1ffd8de429da603adcf79c44d8c1ad:trackers/ocsort_embedding/ocsort.py
         else:
             # (Ndets x 2048)
             ## TODO - ADNAN's CHANGES - grid based app model
@@ -420,18 +415,11 @@ class OCSort(object):
         """
 
         # (M detections X N tracks, final score)
-<<<<<<< HEAD:trackers/integrated_ocsort_embedding/ocsort.py
         ## TODO - ADNAN's CHANGES  - cosine distance computation
         # stage1_emb_cost = None if trk_embs.shape[0] == 0 else dets_embs @ trk_embs.T
         # if self.embedding_off:
         #     stage1_emb_cost = None
 
-=======
-        if self.embedding_off or dets.shape[0] == 0 or trk_embs.shape[0] == 0:
-            stage1_emb_cost = None
-        else:
-            stage1_emb_cost = dets_embs @ trk_embs.T
->>>>>>> d65c0e6c4b1ffd8de429da603adcf79c44d8c1ad:trackers/ocsort_embedding/ocsort.py
         matched, unmatched_dets, unmatched_trks = associate(
             dets,
             trks,
