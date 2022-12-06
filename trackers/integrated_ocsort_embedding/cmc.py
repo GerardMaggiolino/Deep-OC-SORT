@@ -80,21 +80,6 @@ class CMCComputer:
 
         return A
 
-    def _load_file(self, name):
-        affines = []
-        with open(self.file_names[name], "r") as fp:
-            for line in fp:
-                tokens = [float(f) for f in line.split("\t")[1:7]]
-                A = np.eye(2, 3)
-                A[0, 0] = tokens[0]
-                A[0, 1] = tokens[1]
-                A[0, 2] = tokens[2]
-                A[1, 0] = tokens[3]
-                A[1, 1] = tokens[4]
-                A[1, 2] = tokens[5]
-                affines.append(A)
-        self.file_affines[name] = affines
-
     def _affine_file(self, frame, mask, tag):
         name, num = tag.split(":")
         if name not in self.file_affines:
@@ -164,6 +149,21 @@ class CMCComputer:
         self.prev_img = frame
         self.prev_desc = keypoints
         return A
+
+    def _load_file(self, name):
+        affines = []
+        with open(self.file_names[name], "r") as fp:
+            for line in fp:
+                tokens = [float(f) for f in line.split("\t")[1:7]]
+                A = np.eye(2, 3)
+                A[0, 0] = tokens[0]
+                A[0, 1] = tokens[1]
+                A[0, 2] = tokens[2]
+                A[1, 0] = tokens[3]
+                A[1, 1] = tokens[4]
+                A[1, 2] = tokens[5]
+                affines.append(A)
+        self.file_affines[name] = affines
 
     def dump_cache(self):
         with open(self.cache_path, "wb") as fp:
