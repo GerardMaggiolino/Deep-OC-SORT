@@ -35,12 +35,12 @@ class EmbeddingComputer:
     def get_horizontal_split_patches(self, image, bbox, tag, idx, viz=False):
         bbox = np.array(bbox)
         bbox = bbox.astype(np.int)
-        if bbox[0] < 0 or bbox[1] < 0 or bbox[2] > image.shape[3] or bbox[3] > image.shape[2]:
+        if bbox[0] < 0 or bbox[1] < 0 or bbox[2] > image.shape[1] or bbox[3] > image.shape[0]:
             # Faulty Patch Correction
             bbox[0] = np.clip(bbox[0], 0, None)
             bbox[1] = np.clip(bbox[1], 0, None)
-            bbox[2] = np.clip(bbox[2], 0, image.shape[3])
-            bbox[3] = np.clip(bbox[3], 0, image.shape[2])
+            bbox[2] = np.clip(bbox[2], 0, image.shape[1])
+            bbox[3] = np.clip(bbox[3], 0, image.shape[0])
 
         x1, y1, x2, y2 = bbox
         w = x2 - x1
@@ -58,13 +58,12 @@ class EmbeddingComputer:
         for ix, patch_coords in enumerate(split_boxes):
             # print(patch_coords)
             im1 = image[
-                :,
-                :,
                 patch_coords[1] : patch_coords[3],
                 patch_coords[0] : patch_coords[2],
+                :
             ]
 
-            if viz:
+            if viz: ## TODO - change it from torch tensor to numpy array
                 dirs = "./viz/{}/{}".format(tag.split(":")[0], tag.split(":")[1])
                 Path(dirs).mkdir(parents=True, exist_ok=True)
                 cv2.imwrite(
@@ -73,7 +72,12 @@ class EmbeddingComputer:
                 )
 
             try:
-                patch = torchvision.transforms.functional.resize(im1, self.crop_size)
+            
+                patch = cv2.cvtColor(im1, cv2.COLOR_BGR2RGB)
+                patch = cv2.resize(im1, self.crop_size, interpolation=cv2.INTER_LINEAR)
+                patch = torch.as_tensor(patch.astype("float32").transpose(2, 0, 1))
+                patch = patch.unsqueeze(0)
+                # print("test ", patch.shape)
                 patches.append(patch)
             except:
                 print("Error generating crop for EmbeddingComputer")
@@ -82,6 +86,7 @@ class EmbeddingComputer:
             # im1 = cv2.resize(im1, tuple(patch_shape[::-1]))
             # patches.append(im1)
         patches = torch.cat(patches, dim=0)
+       
         # print("Patches shape ", patches.shape)
         # patches = np.array(patches)
         # print("ALL SPLIT PATCHES SHAPE - ", patches.shape)
