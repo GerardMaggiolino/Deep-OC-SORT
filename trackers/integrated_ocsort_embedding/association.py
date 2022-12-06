@@ -356,7 +356,7 @@ def associate(
     emb_cost = None
     if not emb_off:
         if grid_off:
-            emb_cost = None if trk_embs.shape[0] == 0 else det_embs @ trk_embs.T
+            emb_cost = None if (trk_embs.shape[0] == 0 or det_embs.shape[0] == 0) else det_embs @ trk_embs.T
         else:
             emb_cost = split_cosine_dist(det_embs, trk_embs)
 
@@ -371,6 +371,8 @@ def associate(
                 emb_cost[iou_matrix <= 0] = 0
             if not aw_off:
                 emb_cost = compute_aw_max_metric(emb_cost, w_assoc_emb, aw_param)
+            else:
+                emb_cost *= w_assoc_emb
 
             final_cost = -(iou_matrix + angle_diff_cost + emb_cost)
             matched_indices = linear_assignment(final_cost)
