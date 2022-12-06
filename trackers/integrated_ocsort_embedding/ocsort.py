@@ -77,7 +77,18 @@ def speed_direction(bbox1, bbox2):
 
 
 def new_kf_process_noise(w, h, p=1 / 20, v=1 / 160):
-    Q = np.diag(((p * w) ** 2, (p * h) ** 2, (p * w) ** 2, (p * h) ** 2, (v * w) ** 2, (v * h) ** 2, (v * w) ** 2, (v * h) ** 2,))
+    Q = np.diag(
+        (
+            (p * w) ** 2,
+            (p * h) ** 2,
+            (p * w) ** 2,
+            (p * h) ** 2,
+            (v * w) ** 2,
+            (v * h) ** 2,
+            (v * w) ** 2,
+            (v * h) ** 2,
+        )
+    )
     return Q
 
 
@@ -122,7 +133,14 @@ class KalmanBoxTracker(object):
                     [0, 0, 0, 0, 0, 0, 0, 1],
                 ]
             )
-            self.kf.H = np.array([[1, 0, 0, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0, 0, 0], [0, 0, 0, 1, 0, 0, 0, 0],])
+            self.kf.H = np.array(
+                [
+                    [1, 0, 0, 0, 0, 0, 0, 0],
+                    [0, 1, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 1, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 1, 0, 0, 0, 0],
+                ]
+            )
             _, _, w, h = convert_bbox_to_z_new(bbox).reshape(-1)
             self.kf.P = new_kf_process_noise(w, h)
             self.kf.P[:4, :4] *= 4
@@ -144,7 +162,14 @@ class KalmanBoxTracker(object):
                     [0, 0, 0, 0, 0, 0, 1],
                 ]
             )
-            self.kf.H = np.array([[1, 0, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0, 0], [0, 0, 0, 1, 0, 0, 0],])
+            self.kf.H = np.array(
+                [
+                    [1, 0, 0, 0, 0, 0, 0],
+                    [0, 1, 0, 0, 0, 0, 0],
+                    [0, 0, 1, 0, 0, 0, 0],
+                    [0, 0, 0, 1, 0, 0, 0],
+                ]
+            )
             self.kf.R[2:, 2:] *= 10.0
             self.kf.P[4:, 4:] *= 1000.0  # give high uncertainty to the unobservable initial velocities
             self.kf.P *= 10.0
@@ -312,6 +337,7 @@ class OCSort(object):
         inertia=0.2,
         w_association_emb=0.75,
         alpha_fixed_emb=0.95,
+        aw_param=0.5,
         embedding_off=False,
         cmc_off=False,
         aw_off=False,
@@ -333,9 +359,10 @@ class OCSort(object):
         self.inertia = inertia
         self.w_association_emb = w_association_emb
         self.alpha_fixed_emb = alpha_fixed_emb
+        self.aw_param = aw_param
         KalmanBoxTracker.count = 0
 
-        self.embedder = EmbeddingComputer(grid_off)
+        self.embedder = EmbeddingComputer(kwargs["args"].dataset, grid_off)
         self.cmc = CMCComputer()
         self.embedding_off = embedding_off
         self.cmc_off = cmc_off
@@ -367,16 +394,14 @@ class OCSort(object):
         remain_inds = scores > self.det_thresh
         dets = dets[remain_inds]
 
-        # Compute embeddings before rescaling
-        if self.embedding_off or dets.shape[0] == 0:
-            dets_embs = np.ones((dets.shape[0], 1))
-        else:
-            # (Ndets x 2048)
-            ## TODO - ADNAN's CHANGES - grid based app model
-            dets_embs = self.embedder.compute_embedding(img_tensor, dets[:, :4], tag)  ## shape = (Num Detections, 3 , 512)
         # Rescale
-        scale = min(img_tensor.shape[2] / img_numpy.shape[1], img_tensor.shape[3] / img_numpy.shape[2],)
+        scale = min(img_tensor.shape[2] / img_numpy.shape[0], img_tensor.shape[3] / img_numpy.shape[1])
         dets[:, :4] /= scale
+
+        dets_embs = np.zeros((dets.shape[0], 1))
+        if not self.embedding_off and dets.shape[0] != 0:
+            # Shape = (num detections, 3, 512) if grid
+            dets_embs = self.embedder.compute_embedding(img_numpy, dets[:, :4], tag)
 
         # CMC
         if not self.cmc_off:
@@ -402,7 +427,8 @@ class OCSort(object):
             else:
                 trk_embs.append(self.trackers[t].get_emb())
         trks = np.ma.compress_rows(np.ma.masked_invalid(trks))
-        trk_embs = np.array(trk_embs)  # shape = (Num Trackers,3,512)
+        # Shape = (num_trackers, 3, 512) if grid
+        trk_embs = np.array(trk_embs)
         for t in reversed(to_del):
             self.trackers.pop(t)
 
@@ -413,13 +439,6 @@ class OCSort(object):
         """
             First round of association
         """
-
-        # (M detections X N tracks, final score)
-        ## TODO - ADNAN's CHANGES  - cosine distance computation
-        # stage1_emb_cost = None if trk_embs.shape[0] == 0 else dets_embs @ trk_embs.T
-        # if self.embedding_off:
-        #     stage1_emb_cost = None
-
         matched, unmatched_dets, unmatched_trks = associate(
             dets,
             trks,
@@ -431,13 +450,13 @@ class OCSort(object):
             self.inertia,
             self.w_association_emb,
             self.aw_off,
+            self.aw_param,
             self.embedding_off,
             self.grid_off,
         )
         for m in matched:
             self.trackers[m[1]].update(dets[m[0], :])
             self.trackers[m[1]].update_emb(dets_embs[m[0]], alpha=dets_alpha[m[0]])
-
         """
             Second round of associaton by OCR
         """
@@ -447,11 +466,8 @@ class OCSort(object):
             left_trks = last_boxes[unmatched_trks]
             left_trks_embs = trk_embs[unmatched_trks]
 
+            # TODO: maybe use embeddings here
             iou_left = self.asso_func(left_dets, left_trks)
-            # TODO: is better without this
-            # emb_cost_left = left_dets_embs @ left_trks_embs.T
-            # if self.embedding_off:
-            #     emb_cost_left = np.zeros_like(emb_cost_left)
             iou_left = np.array(iou_left)
             if iou_left.max() > self.iou_threshold:
                 """
@@ -459,8 +475,7 @@ class OCSort(object):
                 get a higher performance especially on MOT17/MOT20 datasets. But we keep it
                 uniform here for simplicity
                 """
-                # rematched_indices = linear_assignment(-(iou_left + emb_cost_left))
-                rematched_indices = linear_assignment(-(iou_left))
+                rematched_indices = linear_assignment(-iou_left)
 
                 to_remove_det_indices = []
                 to_remove_trk_indices = []
@@ -480,7 +495,9 @@ class OCSort(object):
 
         # create and initialise new trackers for unmatched detections
         for i in unmatched_dets:
-            trk = KalmanBoxTracker(dets[i, :], delta_t=self.delta_t, emb=dets_embs[i], alpha=dets_alpha[i], new_kf=not self.new_kf_off,)
+            trk = KalmanBoxTracker(
+                dets[i, :], delta_t=self.delta_t, emb=dets_embs[i], alpha=dets_alpha[i], new_kf=not self.new_kf_off
+            )
             self.trackers.append(trk)
         i = len(self.trackers)
         for trk in reversed(self.trackers):
@@ -532,7 +549,13 @@ class OCSort(object):
         k_observations = np.array([k_previous_obs(trk.observations, trk.age, self.delta_t) for trk in self.trackers])
 
         matched, unmatched_dets, unmatched_trks = associate_kitti(
-            dets, trks, cates, self.iou_threshold, velocities, k_observations, self.inertia,
+            dets,
+            trks,
+            cates,
+            self.iou_threshold,
+            velocities,
+            k_observations,
+            self.inertia,
         )
 
         for m in matched:
@@ -598,7 +621,18 @@ class OCSort(object):
                     # Head Padding (HP): recover the lost steps during initializing the track
                     for prev_i in range(self.min_hits - 1):
                         prev_observation = trk.history_observations[-(prev_i + 2)]
-                        ret.append((np.concatenate((prev_observation[:4], [trk.id + 1], [trk.cate], [-(prev_i + 1)],))).reshape(1, -1))
+                        ret.append(
+                            (
+                                np.concatenate(
+                                    (
+                                        prev_observation[:4],
+                                        [trk.id + 1],
+                                        [trk.cate],
+                                        [-(prev_i + 1)],
+                                    )
+                                )
+                            ).reshape(1, -1)
+                        )
             i -= 1
             if trk.time_since_update > self.max_age:
                 self.trackers.pop(i)
@@ -610,4 +644,3 @@ class OCSort(object):
     def dump_cache(self):
         self.cmc.dump_cache()
         self.embedder.dump_cache()
-

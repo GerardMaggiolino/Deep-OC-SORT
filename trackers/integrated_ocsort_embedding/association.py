@@ -156,7 +156,7 @@ def ciou_batch(bboxes1, bboxes2):
     h2 = h2 + 1.0
     h1 = h1 + 1.0
     arctan = np.arctan(w2 / h2) - np.arctan(w1 / h1)
-    v = (4 / (np.pi ** 2)) * (arctan ** 2)
+    v = (4 / (np.pi**2)) * (arctan**2)
     S = 1 - iou
     alpha = v / (S + v)
     ciou = iou - inner_diag / outer_diag - alpha * v
@@ -194,7 +194,7 @@ def speed_direction_batch(dets, tracks):
     CX2, CY2 = (tracks[:, 0] + tracks[:, 2]) / 2.0, (tracks[:, 1] + tracks[:, 3]) / 2.0
     dx = CX1 - CX2
     dy = CY1 - CY2
-    norm = np.sqrt(dx ** 2 + dy ** 2) + 1e-6
+    norm = np.sqrt(dx**2 + dy**2) + 1e-6
     dx = dx / norm
     dy = dy / norm
     return dy, dx  # size: num_track x num_det
@@ -311,7 +311,19 @@ def split_cosine_dist(dets, trks, affinity_thresh=0.55, pair_diff_thresh=0.6, ha
 
 
 def associate(
-    detections, trackers, det_embs, trk_embs, iou_threshold, velocities, previous_obs, vdc_weight, w_assoc_emb, aw_off, emb_off, grid_off
+    detections,
+    trackers,
+    det_embs,
+    trk_embs,
+    iou_threshold,
+    velocities,
+    previous_obs,
+    vdc_weight,
+    w_assoc_emb,
+    aw_off,
+    aw_param,
+    emb_off,
+    grid_off,
 ):
     if len(trackers) == 0:
         return (
@@ -341,15 +353,12 @@ def associate(
     angle_diff_cost = angle_diff_cost.T
     angle_diff_cost = angle_diff_cost * scores
 
-    if not grid_off:
-        emb_cost = split_cosine_dist(det_embs, trk_embs)
-    else:
-        emb_cost = None if trk_embs.shape[0] == 0 else det_embs @ trk_embs.T
-
-    if emb_off:
-        emb_cost = None
-
-    # print("EMB COST - ", emb_cost)
+    emb_cost = None
+    if not emb_off:
+        if grid_off:
+            emb_cost = None if trk_embs.shape[0] == 0 else det_embs @ trk_embs.T
+        else:
+            emb_cost = split_cosine_dist(det_embs, trk_embs)
 
     if min(iou_matrix.shape) > 0:
         a = (iou_matrix > iou_threshold).astype(np.int32)
@@ -359,11 +368,9 @@ def associate(
             if emb_cost is None:
                 emb_cost = 0
             else:
-                pass
-                ## might be beneficial to compare with non overlapping objects incase of recovery from long occlusions
-                # emb_cost[iou_matrix <= 0] = 0
+                emb_cost[iou_matrix <= 0] = 0
             if not aw_off:
-                emb_cost = compute_aw_max_metric(emb_cost, w_assoc_emb)
+                emb_cost = compute_aw_max_metric(emb_cost, w_assoc_emb, aw_param)
 
             final_cost = -(iou_matrix + angle_diff_cost + emb_cost)
             matched_indices = linear_assignment(final_cost)
@@ -474,4 +481,3 @@ def associate_kitti(detections, trackers, det_cates, iou_threshold, velocities, 
         matches = np.concatenate(matches, axis=0)
 
     return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
-

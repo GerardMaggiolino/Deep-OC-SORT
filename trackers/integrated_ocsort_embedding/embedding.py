@@ -1,22 +1,23 @@
 import pdb
 from collections import OrderedDict
+from pathlib import Path
 import os
 import pickle
 
 import torch
+import cv2
 import torchvision
 import torchreid
 import numpy as np
 
 from external.adaptors.fastreid_adaptor import FastReID
-import cv2
-from pathlib import Path
 
 
 class EmbeddingComputer:
-    def __init__(self, grid_off):
+    def __init__(self, dataset, grid_off):
         self.model = None
-        self.crop_size = (256, 128)
+        self.dataset = dataset
+        self.crop_size = (128, 384)
         os.makedirs("./cache/embeddings/", exist_ok=True)
         self.cache_path = "./cache/embeddings/{}_embedding.pkl"
         self.cache = {}
@@ -31,13 +32,9 @@ class EmbeddingComputer:
                 self.cache = pickle.load(fp)
 
     def get_horizontal_split_patches(self, image, bbox, tag, idx, viz=False):
-
         bbox = np.array(bbox)
-
         bbox = bbox.astype(np.int)
-
         if bbox[0] < 0 or bbox[1] < 0 or bbox[2] > image.shape[3] or bbox[3] > image.shape[2]:
-
             # Faulty Patch Correction
             bbox[0] = np.clip(bbox[0], 0, None)
             bbox[1] = np.clip(bbox[1], 0, None)
@@ -45,12 +42,9 @@ class EmbeddingComputer:
             bbox[3] = np.clip(bbox[3], 0, image.shape[2])
 
         x1, y1, x2, y2 = bbox
-
         w = x2 - x1
         h = y2 - y1
-
         ### TODO - Write a generalized split logic
-
         split_boxes = [
             [x1, y1, x1 + w, y1 + h / 3],
             [x1, y1 + h / 3, x1 + w, y1 + (2 / 3) * h],
@@ -58,21 +52,23 @@ class EmbeddingComputer:
         ]
 
         split_boxes = np.array(split_boxes, dtype="int")
-
         patches = []
         # breakpoint()
         for ix, patch_coords in enumerate(split_boxes):
-
             # print(patch_coords)
             im1 = image[
-                :, :, patch_coords[1] : patch_coords[3], patch_coords[0] : patch_coords[2],
+                :,
+                :,
+                patch_coords[1] : patch_coords[3],
+                patch_coords[0] : patch_coords[2],
             ]
 
             if viz:
                 dirs = "./viz/{}/{}".format(tag.split(":")[0], tag.split(":")[1])
                 Path(dirs).mkdir(parents=True, exist_ok=True)
                 cv2.imwrite(
-                    os.path.join(dirs, "{}_{}.png".format(idx, ix)), im1.squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255,
+                    os.path.join(dirs, "{}_{}.png".format(idx, ix)),
+                    im1.squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255,
                 )
 
             try:
@@ -107,57 +103,62 @@ class EmbeddingComputer:
         if self.model is None:
             self.initialize_model()
 
+        # Generate all of the patches
         crops = []
-
-        # Make sure bbox is within image frame
         if self.grid_off:
+            # Basic embeddings
+            h, w = img.shape[:2]
             results = np.round(bbox).astype(np.int32)
-            results[:, 0] = results[:, 0].clip(0, img.shape[3])
-            results[:, 1] = results[:, 1].clip(0, img.shape[2])
-            results[:, 2] = results[:, 2].clip(0, img.shape[3])
-            results[:, 3] = results[:, 3].clip(0, img.shape[2])
-            # Generate all the crops
+            results[:, 0] = results[:, 0].clip(0, w)
+            results[:, 1] = results[:, 1].clip(0, h)
+            results[:, 2] = results[:, 2].clip(0, w)
+            results[:, 3] = results[:, 3].clip(0, h)
 
+            crops = []
             for p in results:
-                crop = img[:, :, p[1] : p[3], p[0] : p[2]]
-                try:
-                    crop = torchvision.transforms.functional.resize(crop, self.crop_size)
-                    crops.append(crop)
-                except:
-                    print("Error generating crop for EmbeddingComputer")
-                    crops.append(torch.randn(3, *self.crop_size).cuda())
-
+                crop = img[p[1]:p[3], p[0]:p[2]]
+                crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+                crop = cv2.resize(crop, self.crop_size, interpolation=cv2.INTER_LINEAR)
+                crop = torch.as_tensor(crop.astype("float32").transpose(2, 0, 1))
+                crop = crop.unsqueeze(0)
+                crops.append(crop)
         else:
-
-            # breakpoint()
+            # Grid patch embeddings
+            # TODO: the image is now a numpy image (h, w, 3)
+            # TODO: the image patch should be unnormalized
+            # TODO: see the above for the basic embeddings
             for idx, box in enumerate(bbox):
                 crop = self.get_horizontal_split_patches(img, box, tag, idx)
                 crops.append(crop)
-
         crops = torch.cat(crops, dim=0)
 
         # Create embeddings and l2 normalize them
         with torch.no_grad():
+            crops = crops.cuda()
+            crops = crops.half()
             embs = self.model(crops)
         embs = torch.nn.functional.normalize(embs)
         if not self.grid_off:
-            embs = embs.reshape(bbox.shape[0], -1, embs.shape[-1])  ## TODO - Test for possible error
+            embs = embs.reshape(bbox.shape[0], -1, embs.shape[-1])
         embs = embs.cpu().numpy()
 
         self.cache[tag] = embs
         return embs
 
     def initialize_model(self):
-        model = torchreid.models.build_model(name="osnet_ain_x1_0", num_classes=2510, loss="softmax", pretrained=False)
-        sd = torch.load("external/weights/osnet_ain_ms_d_c.pth.tar")["state_dict"]
-        new_state_dict = OrderedDict()
-        for k, v in sd.items():
-            name = k[7:]  # remove `module.`
-            new_state_dict[name] = v
-        # load params
-        model.load_state_dict(new_state_dict)
+        if self.dataset == "mot17":
+            path = "external/weights/mot17_sbs_S50.pth"
+        elif self.dataset == "mot20":
+            path = "external/weights/mot20_sbs_S50.pth"
+        elif self.dataset == "dance":
+            path = None
+        else:
+            raise RuntimeError("Need the path for a new ReID model.")
+
+        model = FastReID(path)
         model.eval()
         model.cuda()
+        model.half()
         self.model = model
 
     def dump_cache(self):

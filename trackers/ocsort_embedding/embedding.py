@@ -99,8 +99,12 @@ class EmbeddingComputer:
         """
         if self.dataset == "mot17":
             path = "external/weights/mot17_sbs_S50.pth"
-        else:
+        elif self.dataset == "mot20":
             path = "external/weights/mot20_sbs_S50.pth"
+        elif self.dataset == "dance":
+            path = None
+        else:
+            raise RuntimeError("Need the path for a new ReID model.")
 
         model = FastReID(path)
         model.eval()

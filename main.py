@@ -10,7 +10,7 @@ import numpy as np
 import dataset
 import utils
 from external.adaptors import detector
-from trackers import ocsort_embedding as tracker_module
+from trackers import integrated_ocsort_embedding as tracker_module
 
 
 def get_main_args():
@@ -106,6 +106,8 @@ def main():
         # Frame info
         frame_id = info[2].item()
         video_name = info[4][0].split("/")[0]
+
+        # Hacky way to skip SDP and DPM when testing
         if "FRCNN" not in video_name and args.dataset == "mot17":
             continue
         tag = f"{video_name}:{frame_id}"
