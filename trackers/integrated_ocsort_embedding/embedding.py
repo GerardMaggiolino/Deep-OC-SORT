@@ -14,7 +14,7 @@ from external.adaptors.fastreid_adaptor import FastReID
 
 
 class EmbeddingComputer:
-    def __init__(self, dataset, grid_off):
+    def __init__(self, dataset, grid_off, max_batch=16):
         self.model = None
         self.dataset = dataset
         self.crop_size = (128, 384)
@@ -23,6 +23,7 @@ class EmbeddingComputer:
         self.cache = {}
         self.cache_name = ""
         self.grid_off = grid_off
+        self.max_batch = max_batch
 
     def load_cache(self, path):
         self.cache_name = path
@@ -133,11 +134,15 @@ class EmbeddingComputer:
         crops = torch.cat(crops, dim=0)
 
         # Create embeddings and l2 normalize them
-        with torch.no_grad():
-            crops = crops.cuda()
-            crops = crops.half()
-            embs = self.model(crops)
+        embs = []
+        for idx in range(0, len(crops), self.max_batch):
+            batch_crops = crops[idx:idx + self.max_batch]
+            batch_crops = batch_crops.cuda().half()
+            batch_embs = self.model(batch_crops)
+            embs.extend(batch_embs)
+        embs = torch.cat(embs, dim=0)
         embs = torch.nn.functional.normalize(embs)
+
         if not self.grid_off:
             embs = embs.reshape(bbox.shape[0], -1, embs.shape[-1])
         embs = embs.cpu().numpy()
