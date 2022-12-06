@@ -8,21 +8,27 @@ import numpy as np
 
 
 def main():
+    pdb.set_trace()
+
+    output_path = "./cache/DanceTrack/GMC-{}.txt"
     dataset = NumpyMOTDataset(dataset="dance")
     tracker = KLTTracker()
 
     prev_img = None
     curr_seq = None
     rolling_A = np.eye(2, 3)
+    data = []
 
     for img, tag in dataset:
         seq = tag.split(":")[0]
         if curr_seq is not None and seq != curr_seq:
+            write_cmc(output_path.format(curr_seq), data)
             tracker = KLTTracker()
             curr_seq = seq
             prev_img = None
 
         A = tracker.forward(img)
+        data.append(A)
         if prev_img is None:
             curr_seq = seq
             prev_img = img
@@ -30,15 +36,16 @@ def main():
         rolling_A[:2, :2] = A[:2, :2].T @ rolling_A[:2, :2]
         rolling_A[:, 2] -= A[:, 2]
 
-        #if np.linalg.norm(A[:, 2]) < 0.5:
-        #    print(f"Skipping {tag}", end="\r")
-        #    continue
-
         warped_img = cv2.warpAffine(img, rolling_A, (img.shape[1], img.shape[0]))
 
         cv2.imshow("stab", warped_img)
         cv2.waitKey(0)
         prev_img = img
+
+
+def write_cmc(path, data):
+    pass
+
 
 
 class KLTTracker:

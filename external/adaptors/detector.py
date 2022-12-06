@@ -35,8 +35,6 @@ class Detector(torch.nn.Module):
         """Wait until needed."""
         if self.model_type == "yolox":
             self.model = yolox_adaptor.get_model(self.path, self.dataset)
-        self.model.eval()
-        self.model.half()
 
     def forward(self, batch, tag=None):
         if tag in self.cache:

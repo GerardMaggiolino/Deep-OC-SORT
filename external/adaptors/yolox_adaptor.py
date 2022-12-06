@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 
 from yolox.models import YOLOPAFPN, YOLOX, YOLOXHead
-from yolox.utils import postprocess
+from yolox.utils import postprocess, fuse_model
 from yolox.models.network_blocks import BaseConv
 
 
@@ -34,8 +34,9 @@ def get_model(path, dataset):
     model = exp.get_model()
     ckpt = torch.load(path)
     model.load_state_dict(ckpt["model"])
-    # with warnings.catch_warnings():
-    #    model = fuse_model(model)
+    with warnings.catch_warnings():
+        model = fuse_model(model)
+    model = model.half()
     model = PostModel(model, exp)
     model.cuda()
     model.eval()
