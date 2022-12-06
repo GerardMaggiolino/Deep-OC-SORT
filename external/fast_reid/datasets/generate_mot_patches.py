@@ -37,7 +37,7 @@ def make_parser():
 
     parser.add_argument("--data_path", default="", help="path to MOT data")
     parser.add_argument("--save_path", default="fast_reid/datasets", help="Path to save the MOT-ReID dataset")
-    parser.add_argument("--mot", default=17, help="MOTChallenge dataset number e.g. 17, 20")
+    parser.add_argument("--dataset", default='MOT17', help="MOTChallenge dataset number e.g. 17, 20")
 
     return parser
 
@@ -45,19 +45,19 @@ def make_parser():
 def main(args):
 
     # Create folder for outputs
-    save_path = os.path.join(args.save_path, 'MOT' + str(args.mot) + '-ReID')
+    save_path = os.path.join(args.save_path, str(args.dataset) + '-ReID')
     os.makedirs(save_path, exist_ok=True)
 
-    save_path = os.path.join(args.save_path, 'MOT' + str(args.mot) + '-ReID')
+    save_path = os.path.join(args.save_path,  str(args.dataset) + '-ReID')
     train_save_path = os.path.join(save_path, 'bounding_box_train')
     os.makedirs(train_save_path, exist_ok=True)
     test_save_path = os.path.join(save_path, 'bounding_box_test')
     os.makedirs(test_save_path, exist_ok=True)
 
     # Get gt data
-    data_path = os.path.join(args.data_path, 'MOT' + str(args.mot), 'train')
+    data_path = os.path.join(args.data_path, str(args.dataset), 'train')
 
-    if args.mot == '17':
+    if args.dataset == 'MOT17':
         seqs = [f for f in os.listdir(data_path) if 'FRCNN' in f]
     else:
         seqs = os.listdir(data_path)

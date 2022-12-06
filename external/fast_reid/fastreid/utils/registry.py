@@ -56,6 +56,7 @@ class Registry(object):
         self._do_register(name, obj)
 
     def get(self, name: str) -> object:
+        # print(self._obj_map.keys())
         ret = self._obj_map.get(name)
         if ret is None:
             raise KeyError(

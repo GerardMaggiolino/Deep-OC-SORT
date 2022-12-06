@@ -36,6 +36,8 @@ def _train_loader_from_config(cfg, *, train_set=None, transforms=None, sampler=N
 
     if train_set is None:
         train_items = list()
+        # print(DATASET_REGISTRY)
+        # print(cfg.DATASETS.NAMES)
         for d in cfg.DATASETS.NAMES:
             data = DATASET_REGISTRY.get(d)(root=_root, **kwargs)
             if comm.is_main_process():
