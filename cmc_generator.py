@@ -1,6 +1,7 @@
 import os
 import glob
 import json
+import pickle
 import pdb
 
 import cv2
@@ -8,57 +9,100 @@ import numpy as np
 
 
 def main():
-    pdb.set_trace()
+    with open("cache/det_bytetrack_ablation.pkl", "rb") as fp:
+        detections = pickle.load(fp)
 
-    output_path = "./cache/DanceTrack/GMC-{}.txt"
-    dataset = NumpyMOTDataset(dataset="dance")
+    output_path = "./cache/cmc_files/MOT17_custom_ablation/GMC-{}.txt"
+    dataset = NumpyMOTDataset(dataset="mot17")
     tracker = KLTTracker()
+    scorer = Evaluator()
 
-    prev_img = None
     curr_seq = None
-    rolling_A = np.eye(2, 3)
     data = []
 
     for img, tag in dataset:
+        print(f"{tag}\r", end="")
         seq = tag.split(":")[0]
         if curr_seq is not None and seq != curr_seq:
+            print(f"Writing for {curr_seq}.")
+            print(f"Skipped {tracker.skipped_frames}/{len(data)} frames.")
+            before, after = scorer.get_scores()
+            print(f"Mean L1 distance before ({before:.2f}) and after ({after:.2f}) correction")
             write_cmc(output_path.format(curr_seq), data)
             tracker = KLTTracker()
-            curr_seq = seq
-            prev_img = None
+            scorer = Evaluator()
 
-        A = tracker.forward(img)
+        scale = min(800 / img.shape[0], 1440 / img.shape[1])
+        bbox = detections[tag].numpy()
+        bbox = bbox[bbox[:, 4] > 0.5][:, :4] / scale
+
+        A = tracker.forward(img, bbox)
+        scorer.forward(img, A)
         data.append(A)
-        if prev_img is None:
-            curr_seq = seq
-            prev_img = img
-            continue
-        rolling_A[:2, :2] = A[:2, :2].T @ rolling_A[:2, :2]
-        rolling_A[:, 2] -= A[:, 2]
-
-        warped_img = cv2.warpAffine(img, rolling_A, (img.shape[1], img.shape[0]))
-
-        cv2.imshow("stab", warped_img)
-        cv2.waitKey(0)
-        prev_img = img
+        curr_seq = seq
 
 
 def write_cmc(path, data):
-    pass
+    with open(path, "w") as fp:
+        for idx, A in enumerate(data):
+            line = "\t".join([f"{s:.10f}" for s in ([idx] + A.reshape(-1).tolist())]) + "\n"
+            fp.write(line)
 
+
+class Evaluator:
+    def __init__(self):
+        self.prior_scores = 0
+        self.new_scores = 0
+        self.count = 0
+        self.img_scale = 1
+        self.every = 5
+
+        self.prev_img = None
+        self.transform = np.eye(3, 3)
+
+    def forward(self, img, transform):
+        img = cv2.resize(img, None, fx=self.img_scale, fy=self.img_scale)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        transform[:, 2] *= self.img_scale
+
+        if self.prev_img is None:
+            self.prev_img = img
+            return
+
+        self.count += 1
+        # Compose transform and evaluate every few frames
+        transform = np.concatenate((transform, np.array([[0, 0, 1]])), axis=0)
+        self.transform = transform @ self.transform
+        if self.count % self.every != 0:
+            return
+
+        mask = np.ones_like(self.prev_img)
+        out = cv2.warpAffine(self.prev_img, self.transform[:2], (img.shape[1], img.shape[0]))
+        out_mask = cv2.warpAffine(mask, self.transform[:2], (img.shape[1], img.shape[0])).astype(np.bool_)
+
+        new_score = np.abs(out[out_mask] - img[out_mask]).mean()
+        prior_score = np.abs(self.prev_img[out_mask] - img[out_mask]).mean()
+
+        self.prior_scores += (prior_score - self.prior_scores) / self.count
+        self.new_scores += (new_score - self.new_scores) / self.count
+        if new_score > prior_score * 2:
+            print("Very bad transform, defaulting to identity")
+        self.prev_img = img
+        self.transform = np.eye(3, 3)
+
+    def get_scores(self):
+        return self.prior_scores, self.new_scores
 
 
 class KLTTracker:
     def __init__(self):
-        self.max_tracks = 3000
+        self.max_tracks = 4000
         self.min_points = 10
         self.track_length = 10
-        self.forward_backward_thresh = 2
+        self.forward_backward_thresh = 1
         self.corner_params = dict(
             maxCorners=self.max_tracks,
             qualityLevel=0.01,
-            minDistance=7,
-            blockSize=7,
             useHarrisDetector=False,
         )
         self.lk_params = dict(
@@ -69,6 +113,7 @@ class KLTTracker:
         self.prev_frame = None
         self.prev_mask = None
         self.tracks = []
+        self.skipped_frames = 0
 
     def forward(self, curr_img, boxes=None):
         A = np.eye(2, 3)
@@ -118,12 +163,13 @@ class KLTTracker:
         if p0.shape[0] > self.min_points:
             A, _ = cv2.estimateAffinePartial2D(p0, p1, method=cv2.RANSAC)
         else:
-            print("Warning: not enough matching points")
+            self.skipped_frames += 1
 
         self.prev_frame = curr_frame
         self.prev_mask = mask
 
         return A
+
 
 
 class NumpyMOTDataset:

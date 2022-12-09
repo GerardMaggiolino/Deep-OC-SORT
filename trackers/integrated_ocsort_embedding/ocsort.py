@@ -398,6 +398,7 @@ class OCSort(object):
         scale = min(img_tensor.shape[2] / img_numpy.shape[0], img_tensor.shape[3] / img_numpy.shape[1])
         dets[:, :4] /= scale
 
+        # Generate embeddings
         dets_embs = np.ones((dets.shape[0], 1))
         if not self.embedding_off and dets.shape[0] != 0:
             # Shape = (num detections, 3, 512) if grid

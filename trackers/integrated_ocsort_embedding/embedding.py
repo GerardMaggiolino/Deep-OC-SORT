@@ -33,9 +33,14 @@ class EmbeddingComputer:
                 self.cache = pickle.load(fp)
 
     def get_horizontal_split_patches(self, image, bbox, tag, idx, viz=False):
+        if isinstance(image, np.ndarray):
+            h, w = image.shape[:2]
+        else:
+            h, w = image.shape[2:]
+
         bbox = np.array(bbox)
         bbox = bbox.astype(np.int)
-        if bbox[0] < 0 or bbox[1] < 0 or bbox[2] > image.shape[1] or bbox[3] > image.shape[0]:
+        if bbox[0] < 0 or bbox[1] < 0 or bbox[2] > w or bbox[3] > h:
             # Faulty Patch Correction
             bbox[0] = np.clip(bbox[0], 0, None)
             bbox[1] = np.clip(bbox[1], 0, None)
@@ -56,35 +61,31 @@ class EmbeddingComputer:
         patches = []
         # breakpoint()
         for ix, patch_coords in enumerate(split_boxes):
-            # print(patch_coords)
-            im1 = image[
-                patch_coords[1] : patch_coords[3],
-                patch_coords[0] : patch_coords[2],
-                :
-            ]
+            if isinstance(image, np.ndarray):
+                im1 = image[
+                    patch_coords[1] : patch_coords[3],
+                    patch_coords[0] : patch_coords[2],
+                    :
+                ]
 
-            if viz: ## TODO - change it from torch tensor to numpy array
-                dirs = "./viz/{}/{}".format(tag.split(":")[0], tag.split(":")[1])
-                Path(dirs).mkdir(parents=True, exist_ok=True)
-                cv2.imwrite(
-                    os.path.join(dirs, "{}_{}.png".format(idx, ix)),
-                    im1.squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255,
-                )
-
-            try:
-            
+                if viz: ## TODO - change it from torch tensor to numpy array
+                    dirs = "./viz/{}/{}".format(tag.split(":")[0], tag.split(":")[1])
+                    Path(dirs).mkdir(parents=True, exist_ok=True)
+                    cv2.imwrite(
+                        os.path.join(dirs, "{}_{}.png".format(idx, ix)),
+                        im1.squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255,
+                    )
                 patch = cv2.cvtColor(im1, cv2.COLOR_BGR2RGB)
-                patch = cv2.resize(im1, self.crop_size, interpolation=cv2.INTER_LINEAR)
+                patch = cv2.resize(patch, self.crop_size, interpolation=cv2.INTER_LINEAR)
                 patch = torch.as_tensor(patch.astype("float32").transpose(2, 0, 1))
                 patch = patch.unsqueeze(0)
                 # print("test ", patch.shape)
                 patches.append(patch)
-            except:
-                print("Error generating crop for EmbeddingComputer")
-                patches.append(torch.randn(3, *self.crop_size).cuda())
+            else:
+                im1 = image[:, :, patch_coords[1]: patch_coords[3], patch_coords[0]: patch_coords[2]]
+                patch = torchvision.transforms.functional.resize(im1, (256, 128))
+                patches.append(patch)
 
-            # im1 = cv2.resize(im1, tuple(patch_shape[::-1]))
-            # patches.append(im1)
         patches = torch.cat(patches, dim=0)
        
         # print("Patches shape ", patches.shape)
@@ -113,7 +114,10 @@ class EmbeddingComputer:
         crops = []
         if self.grid_off:
             # Basic embeddings
-            h, w = img.shape[:2]
+            if isinstance(img, np.ndarray):
+                h, w = img.shape[:2]
+            else:
+                h, w = img.shape[2:]
             results = np.round(bbox).astype(np.int32)
             results[:, 0] = results[:, 0].clip(0, w)
             results[:, 1] = results[:, 1].clip(0, h)
@@ -121,18 +125,21 @@ class EmbeddingComputer:
             results[:, 3] = results[:, 3].clip(0, h)
 
             crops = []
+
             for p in results:
-                crop = img[p[1]:p[3], p[0]:p[2]]
-                crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
-                crop = cv2.resize(crop, self.crop_size, interpolation=cv2.INTER_LINEAR)
-                crop = torch.as_tensor(crop.astype("float32").transpose(2, 0, 1))
-                crop = crop.unsqueeze(0)
-                crops.append(crop)
+                if isinstance(img, np.ndarray):
+                    crop = img[p[1]:p[3], p[0]:p[2]]
+                    crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+                    crop = cv2.resize(crop, self.crop_size, interpolation=cv2.INTER_LINEAR)
+                    crop = torch.as_tensor(crop.astype("float32").transpose(2, 0, 1))
+                    crop = crop.unsqueeze(0)
+                    crops.append(crop)
+                else:
+                    crop = img[:, :, p[1]: p[3], p[0]: p[2]]
+                    crop = torchvision.transforms.functional.resize(crop, (256, 128))
+                    crops.append(crop)
         else:
             # Grid patch embeddings
-            # TODO: the image is now a numpy image (h, w, 3)
-            # TODO: the image patch should be unnormalized
-            # TODO: see the above for the basic embeddings
             for idx, box in enumerate(bbox):
                 crop = self.get_horizontal_split_patches(img, box, tag, idx)
                 crops.append(crop)
@@ -142,8 +149,9 @@ class EmbeddingComputer:
         embs = []
         for idx in range(0, len(crops), self.max_batch):
             batch_crops = crops[idx:idx + self.max_batch]
-            batch_crops = batch_crops.cuda().half()
-            batch_embs = self.model(batch_crops)
+            batch_crops = batch_crops.cuda()
+            with torch.no_grad():
+                batch_embs = self.model(batch_crops)
             embs.extend(batch_embs)
         embs = torch.stack(embs)
         embs = torch.nn.functional.normalize(embs, dim=-1)
@@ -156,6 +164,18 @@ class EmbeddingComputer:
         return embs
 
     def initialize_model(self):
+        model = torchreid.models.build_model(name="osnet_ain_x1_0", num_classes=2510, loss="softmax", pretrained=False)
+        sd = torch.load("external/weights/osnet_ain_ms_d_c.pth.tar")["state_dict"]
+        new_state_dict = OrderedDict()
+        for k, v in sd.items():
+            name = k[7:]  # remove `module.`
+            new_state_dict[name] = v
+        # load params
+        model.load_state_dict(new_state_dict)
+        model.eval()
+        model.cuda()
+        self.model = model
+        return
         if self.dataset == "mot17":
             path = "external/weights/mot17_sbs_S50.pth"
         elif self.dataset == "mot20":
