@@ -52,7 +52,7 @@ For the baseline, MOT17/20:
 ```
 # Flags to disable all the new changes
 python3 main.py --exp_name $exp --post --emb_off --grid_off --cmc_off --aw_off --new_kf_off --dataset mot17
-python3 main.py --exp_name $exp --post --emb_off --grid_off --cmc_off --aw_off --new_kf_off --dataset mot20
+python3 main.py --exp_name $exp --post --emb_off --grid_off --cmc_off --aw_off --new_kf_off --dataset mot20 --track_thresh 0.4
 python3 main.py --exp_name $exp --post --emb_off --grid_off --cmc_off --aw_off --new_kf_off --dataset dance
 ```
 
@@ -60,8 +60,8 @@ For the best results so far:
 
 ```
 # Flag to disable just the BoT-SORT proposed KF, which reduces performance in OC-SORT
-python3 main.py --exp_name $exp --post --new_kf_off --grid_off --w_assoc_emb 3 --dataset mot17
-python3 main.py --exp_name $exp --post --new_kf_off --grid_off --w_assoc_emb 3 --dataset mot20
+python3 main.py --exp_name $exp --post --new_kf_off --grid_off --w_assoc_emb 3 --dataset mot17 
+python3 main.py --exp_name $exp --post --new_kf_off --grid_off --w_assoc_emb 3 --dataset mot20 --track_thresh 0.4
 ```
 
 This will create results at:

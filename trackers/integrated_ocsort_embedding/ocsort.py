@@ -362,7 +362,7 @@ class OCSort(object):
         self.aw_param = aw_param
         KalmanBoxTracker.count = 0
 
-        self.embedder = EmbeddingComputer(kwargs["args"].dataset, grid_off)
+        self.embedder = EmbeddingComputer(kwargs["args"].dataset, kwargs["args"].test_dataset, grid_off)
         self.cmc = CMCComputer()
         self.embedding_off = embedding_off
         self.cmc_off = cmc_off

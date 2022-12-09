@@ -14,9 +14,10 @@ from external.adaptors.fastreid_adaptor import FastReID
 
 
 class EmbeddingComputer:
-    def __init__(self, dataset, grid_off, max_batch=16):
+    def __init__(self, dataset, test_dataset, grid_off, max_batch=64):
         self.model = None
         self.dataset = dataset
+        self.test_dataset = test_dataset
         self.crop_size = (128, 384)
         os.makedirs("./cache/embeddings/", exist_ok=True)
         self.cache_path = "./cache/embeddings/{}_embedding.pkl"
@@ -179,11 +180,17 @@ class EmbeddingComputer:
         return
         """
         if self.dataset == "mot17":
-            path = "external/weights/mot17_sbs_S50.pth"
+            if self.test_dataset:
+                path = "external/weights/mot17_sbs_S50.pth"
+            else:
+                path = "external/weights/mot20_sbs_S50.pth"
         elif self.dataset == "mot20":
-            path = "external/weights/mot20_sbs_S50.pth"
+            if self.test_dataset:
+                path = "external/weights/mot20_sbs_S50.pth"
+            else:
+                path = "external/weights/mot17_sbs_S50.pth"
         elif self.dataset == "dance":
-            path = None
+            raise RuntimeError("Need the path for a new ReID model.")
         else:
             raise RuntimeError("Need the path for a new ReID model.")
 
