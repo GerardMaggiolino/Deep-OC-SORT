@@ -51,18 +51,17 @@ For the baseline, MOT17/20:
 
 ```
 # Flags to disable all the new changes
-python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --dataset mot17
-python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --dataset mot20
-python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --dataset dance
+python3 main.py --exp_name $exp --post --emb_off --grid_off --cmc_off --aw_off --new_kf_off --dataset mot17
+python3 main.py --exp_name $exp --post --emb_off --grid_off --cmc_off --aw_off --new_kf_off --dataset mot20
+python3 main.py --exp_name $exp --post --emb_off --grid_off --cmc_off --aw_off --new_kf_off --dataset dance
 ```
 
 For the best results so far:
 
 ```
 # Flag to disable just the BoT-SORT proposed KF, which reduces performance in OC-SORT
-python3 main.py --exp_name $exp --post --new_kf_off --w_assoc_emb 3
-python3 main.py --exp_name $exp --post --new_kf_off --w_assoc_emb 3 --dataset mot20
-python3 main.py --exp_name $exp --post --new_kf_off --w_assoc_emb 3 --dataset dance
+python3 main.py --exp_name $exp --post --new_kf_off --grid_off --w_assoc_emb 3 --dataset mot17
+python3 main.py --exp_name $exp --post --new_kf_off --grid_off --w_assoc_emb 3 --dataset mot20
 ```
 
 This will create results at:
@@ -97,10 +96,10 @@ python3 external/TrackEval/scripts/run_mot_challenge.py \
   --BENCHMARK MOT17
 ```
 
-### Using the Integrated Tracker (best results)
+### Using the Integrated Tracker 
 
 ```
-python main.py --exp_name exp_int --post  --aw_off --new_kf_off  --w_assoc_emb 3
+python main.py --exp_name exp_int --post  --aw_off --new_kf_off  --w_assoc_emb 0.75
 ```
 
 Integrated Results
