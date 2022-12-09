@@ -164,6 +164,7 @@ class EmbeddingComputer:
         return embs
 
     def initialize_model(self):
+        """
         model = torchreid.models.build_model(name="osnet_ain_x1_0", num_classes=2510, loss="softmax", pretrained=False)
         sd = torch.load("external/weights/osnet_ain_ms_d_c.pth.tar")["state_dict"]
         new_state_dict = OrderedDict()
@@ -176,6 +177,7 @@ class EmbeddingComputer:
         model.cuda()
         self.model = model
         return
+        """
         if self.dataset == "mot17":
             path = "external/weights/mot17_sbs_S50.pth"
         elif self.dataset == "mot20":

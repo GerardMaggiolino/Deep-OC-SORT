@@ -28,5 +28,7 @@ class FastReID(torch.nn.Module):
         self.pH, self.pW = self.cfg.INPUT.SIZE_TEST
 
     def forward(self, batch):
+        # Uses half during training
+        batch = batch.half()
         with torch.no_grad():
             return self.model(batch)
