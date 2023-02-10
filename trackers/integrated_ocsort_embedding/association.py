@@ -289,36 +289,6 @@ def compute_aw_max_metric(emb_cost, w_association_emb, bottom=0.5):
     return w_emb * emb_cost
 
 
-def compute_aw_max_metric_subtract(emb_cost, w_association_emb, bottom):
-    w_emb = np.zeros_like(emb_cost)
-
-    for idx in range(emb_cost.shape[0]):
-        inds = np.argsort(-emb_cost[idx])
-        # If there's less than two matches, just keep original weight
-        if len(inds) < 2:
-            continue
-        if emb_cost[idx, inds[0]] == 0:
-            row_weight = 0
-        else:
-            row_weight = min((emb_cost[idx, inds[0]] - emb_cost[idx, inds[1]]), bottom) / bottom
-        w_emb[idx] = row_weight
-
-    for idj in range(emb_cost.shape[1]):
-        inds = np.argsort(-emb_cost[:, idj])
-        # If there's less than two matches, just keep original weight
-        if len(inds) < 2:
-            continue
-        if emb_cost[inds[0], idj] == 0:
-            col_weight = 0
-        else:
-            col_weight = min(emb_cost[inds[0], idj] - emb_cost[inds[1], idj], bottom) / bottom
-        w_emb[:, idj] += col_weight
-
-    w_emb /= 2
-
-    return w_emb * w_association_emb
-
-
 def split_cosine_dist(dets, trks, affinity_thresh=0.55, pair_diff_thresh=0.6, hard_thresh=True):
 
     cos_dist = np.zeros((len(dets), len(trks)))

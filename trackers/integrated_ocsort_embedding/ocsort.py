@@ -238,11 +238,11 @@ class KalmanBoxTracker(object):
             self.hit_streak += 1
             if self.new_kf:
                 R = new_kf_measurement_noise(self.kf.x[2, 0], self.kf.x[3, 0])
-                self.kf.update(self.bbox_to_z_func(bbox), R=R)
+                self.kf.update(self.bbox_to_z_func(bbox), R=R, new_kf=True)
             else:
                 self.kf.update(self.bbox_to_z_func(bbox))
         else:
-            self.kf.update(bbox)
+            self.kf.update(bbox, new_kf=self.new_kf)
             self.frozen = True
 
     def update_emb(self, emb, alpha=0.9):

@@ -430,7 +430,8 @@ class KalmanFilterNew(object):
                 self.attr_saved["last_measurement"][:2] = m @ self.attr_saved["last_measurement"][:2] + t
                 # self.attr_saved["last_measurement"][2] *= scale
 
-    def unfreeze(self):
+    def unfreeze(self, new_kf):
+        # TODO: new KF filter
         if self.attr_saved is not None:
             new_history = deepcopy(self.history_obs)
             self.__dict__ = self.attr_saved
@@ -442,13 +443,19 @@ class KalmanFilterNew(object):
             index2 = indices[-1]
             # box1 = new_history[index1]
             box1 = self.last_measurement
-            x1, y1, s1, r1 = box1
-            w1 = np.sqrt(s1 * r1)
-            h1 = np.sqrt(s1 / r1)
+            if new_kf:
+                x1, y1, w1, h1 = box1
+            else:
+                x1, y1, s1, r1 = box1
+                w1 = np.sqrt(s1 * r1)
+                h1 = np.sqrt(s1 / r1)
             box2 = new_history[index2]
-            x2, y2, s2, r2 = box2
-            w2 = np.sqrt(s2 * r2)
-            h2 = np.sqrt(s2 / r2)
+            if new_kf:
+                x2, y2, w2, h2 = box2
+            else:
+                x2, y2, s2, r2 = box2
+                w2 = np.sqrt(s2 * r2)
+                h2 = np.sqrt(s2 / r2)
             time_gap = index2 - index1
             dx = (x2 - x1) / time_gap
             dy = (y2 - y1) / time_gap
@@ -464,9 +471,12 @@ class KalmanFilterNew(object):
                 y = y1 + (i + 1) * dy
                 w = w1 + (i + 1) * dw
                 h = h1 + (i + 1) * dh
-                s = w * h
-                r = w / float(h)
-                new_box = np.array([x, y, s, r]).reshape((4, 1))
+                if new_kf:
+                    new_box = np.array([x, y, w, h]).reshape((4, 1))
+                else:
+                    s = w * h
+                    r = w / float(h)
+                    new_box = np.array([x, y, s, r]).reshape((4, 1))
                 """
                     I still use predict-update loop here to refresh the parameters,
                     but this can be faster by directly modifying the internal parameters
@@ -477,7 +487,7 @@ class KalmanFilterNew(object):
                 if not i == (index2 - index1 - 1):
                     self.predict()
 
-    def update(self, z, R=None, H=None):
+    def update(self, z, R=None, H=None, new_kf=False):
         """
         Add a new measurement (z) to the Kalman filter.
         If z is None, nothing is computed. However, x_post and P_post are
@@ -524,7 +534,7 @@ class KalmanFilterNew(object):
             """
             Get observation, use online smoothing to re-update parameters
             """
-            self.unfreeze()
+            self.unfreeze(new_kf)
         self.observed = True
 
         if R is None:

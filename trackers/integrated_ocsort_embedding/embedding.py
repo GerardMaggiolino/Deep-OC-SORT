@@ -26,6 +26,9 @@ class EmbeddingComputer:
         self.grid_off = grid_off
         self.max_batch = max_batch
 
+        # Only used for the general ReID model (not FastReID)
+        self.normalize = False
+
     def load_cache(self, path):
         self.cache_name = path
         cache_path = self.cache_path.format(path)
@@ -115,10 +118,7 @@ class EmbeddingComputer:
         crops = []
         if self.grid_off:
             # Basic embeddings
-            if isinstance(img, np.ndarray):
-                h, w = img.shape[:2]
-            else:
-                h, w = img.shape[2:]
+            h, w = img.shape[:2]
             results = np.round(bbox).astype(np.int32)
             results[:, 0] = results[:, 0].clip(0, w)
             results[:, 1] = results[:, 1].clip(0, h)
@@ -126,19 +126,17 @@ class EmbeddingComputer:
             results[:, 3] = results[:, 3].clip(0, h)
 
             crops = []
-
             for p in results:
-                if isinstance(img, np.ndarray):
-                    crop = img[p[1]:p[3], p[0]:p[2]]
-                    crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
-                    crop = cv2.resize(crop, self.crop_size, interpolation=cv2.INTER_LINEAR)
-                    crop = torch.as_tensor(crop.astype("float32").transpose(2, 0, 1))
-                    crop = crop.unsqueeze(0)
-                    crops.append(crop)
-                else:
-                    crop = img[:, :, p[1]: p[3], p[0]: p[2]]
-                    crop = torchvision.transforms.functional.resize(crop, (256, 128))
-                    crops.append(crop)
+                crop = img[p[1]:p[3], p[0]:p[2]]
+                crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+                crop = cv2.resize(crop, self.crop_size, interpolation=cv2.INTER_LINEAR).astype(np.float32)
+                if self.normalize:
+                    crop /= 255
+                    crop -= np.array((0.485, 0.456, 0.406))
+                    crop /= np.array((0.229, 0.224, 0.225))
+                crop = torch.as_tensor(crop.transpose(2, 0, 1))
+                crop = crop.unsqueeze(0)
+                crops.append(crop)
         else:
             # Grid patch embeddings
             for idx, box in enumerate(bbox):
@@ -165,6 +163,33 @@ class EmbeddingComputer:
         return embs
 
     def initialize_model(self):
+        if self.dataset == "mot17":
+            if self.test_dataset:
+                path = "external/weights/mot17_sbs_S50.pth"
+            else:
+                return self._get_general_model()
+        elif self.dataset == "mot20":
+            if self.test_dataset:
+                path = "external/weights/mot20_sbs_S50.pth"
+            else:
+                return self._get_general_model()
+        elif self.dataset == "dance":
+            raise RuntimeError("Need the path for a new ReID model.")
+        else:
+            raise RuntimeError("Need the path for a new ReID model.")
+
+        model = FastReID(path)
+        model.eval()
+        model.cuda()
+        model.half()
+        self.model = model
+
+    def _get_general_model(self):
+        """Used for the half-val for MOT17/20.
+
+        The MOT17/20 SBS models are trained over the half-val we
+        evaluate on as well. Instead we use a different model for
+        validation.
         """
         model = torchreid.models.build_model(name="osnet_ain_x1_0", num_classes=2510, loss="softmax", pretrained=False)
         sd = torch.load("external/weights/osnet_ain_ms_d_c.pth.tar")["state_dict"]
@@ -177,28 +202,9 @@ class EmbeddingComputer:
         model.eval()
         model.cuda()
         self.model = model
-        return
-        """
-        if self.dataset == "mot17":
-            if self.test_dataset:
-                path = "external/weights/mot17_sbs_S50.pth"
-            else:
-                path = "external/weights/mot20_sbs_S50.pth"
-        elif self.dataset == "mot20":
-            if self.test_dataset:
-                path = "external/weights/mot20_sbs_S50.pth"
-            else:
-                path = "external/weights/mot17_sbs_S50.pth"
-        elif self.dataset == "dance":
-            raise RuntimeError("Need the path for a new ReID model.")
-        else:
-            raise RuntimeError("Need the path for a new ReID model.")
+        self.crop_size = (128, 256)
+        self.normalize = True
 
-        model = FastReID(path)
-        model.eval()
-        model.cuda()
-        model.half()
-        self.model = model
 
     def dump_cache(self):
         if self.cache_name:
