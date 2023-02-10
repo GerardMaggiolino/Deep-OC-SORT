@@ -31,16 +31,28 @@
 
 exp=0209_validation_baseline
 python3 main.py --exp_name $exp --post --new_kf_off --grid_off --emb_off --aw_off --cmc_off --dataset mot17
+
 exp=0209_validation_emb
 python3 main.py --exp_name $exp --post --new_kf_off --grid_off --aw_off --cmc_off --dataset mot17
+
 exp=0209_validation_cmc
 python3 main.py --exp_name $exp --post --new_kf_off --grid_off --aw_off --emb_off --dataset mot17
+
+exp=0209_validation_cmc_kf
+python3 main.py --exp_name $exp --post --grid_off --aw_off --emb_off --dataset mot17
+
 exp=0209_validation_cmc_emb
 python3 main.py --exp_name $exp --post --new_kf_off --grid_off --aw_off --dataset mot17
+
 exp=0209_validation_cmc_emb_aw
 python3 main.py --exp_name $exp --post --new_kf_off --grid_off --w_assoc_emb 3 --dataset mot17
+
 exp=0209_validation_cmc_emb_aw_kf
 python3 main.py --exp_name $exp --post --grid_off --w_assoc_emb 3 --dataset mot17
+
+exp=0209_test_all
+python3 main.py --exp_name $exp --post --grid_off --w_assoc_emb 3 --dataset mot17 --test_dataset
+python3 main.py --exp_name $exp --post --grid_off --w_assoc_emb 3 --dataset mot20 --track_thresh 0.4 --test_dataset
 
 
 
