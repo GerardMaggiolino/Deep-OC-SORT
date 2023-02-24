@@ -1,17 +1,29 @@
 # Deep-OC-SORT
 
-### TODOs
+[ArXiv submission.](https://arxiv.org/abs/2302.11813)
 
-- Move away from submodules. It's difficult to maintain paths and adaptors.
-- Streamline installation.
-- Refactor the Kalman filter. Support batch operations.
+### NOTE FROM THE AUTHOR 
+
+The repo isn't in a clean state at the moment, and the installation below could be broken. However, I'm now 
+working full time at Tesla Autopilot and don't have a ton of free time to make QOL changes here. I'll update this 
+ASAP.
+
+Please try to install the YOLOX model and requirements. Below are the basic commands to run the validation datasets 
+and verify the results in the paper. If something is broken after you've installed requirements, raise an issue. If you want to 
+help, some order of importance tasks are: 
+
+- *Streamlining the installation process, removing submodules and just going to flat folders.*
+- Making the Kalman filter significantly less ugly and batched. 
+- Removing unused functions, excess code.  
 
 ### Installation
 
 After cloning, run:
 `git submodule update --init` to pull external dependencies (detectors, benchmark evaluators).
 
-Run `python setup.py develop` (possibly broken, but should include YOLOX setup.py).
+*NOTE:* We'll move away from submodules ASAP. Having the folders here for you should be easier.  
+
+Follow YOLOX installation instructions in its subdirectory.
 
 Add [the weights](https://drive.google.com/file/d/1iqhM-6V_r1FpOlOzrdP_Ejshgk0DxOob/view) to the `external/weights` directory.
 
@@ -45,7 +57,7 @@ python3 data/tools/convert_dance_to_coco.py
 
 ### Evaluation
 
-Set `exp=exp1`
+Set `exp=baseline`
 
 For the baseline, MOT17/20:
 
@@ -53,60 +65,44 @@ For the baseline, MOT17/20:
 # Flags to disable all the new changes
 python3 main.py --exp_name $exp --post --emb_off --grid_off --cmc_off --aw_off --new_kf_off --dataset mot17
 python3 main.py --exp_name $exp --post --emb_off --grid_off --cmc_off --aw_off --new_kf_off --dataset mot20 --track_thresh 0.4
-python3 main.py --exp_name $exp --post --emb_off --grid_off --cmc_off --aw_off --new_kf_off --dataset dance
-```
-
-For the best results so far:
-
-```
-# Flag to disable just the BoT-SORT proposed KF, which reduces performance in OC-SORT
-python3 main.py --exp_name $exp --post --new_kf_off --grid_off --w_assoc_emb 3 --dataset mot17 
-python3 main.py --exp_name $exp --post --new_kf_off --grid_off --w_assoc_emb 3 --dataset mot20 --track_thresh 0.4
+python3 main.py --exp_name $exp --post --emb_off --grid_off --cmc_off --aw_off --new_kf_off --dataset dance --aspect_ratio_thresh 1000
 ```
 
 This will create results at:
 
 ```
 # For the standard results
-results/trackers/MOT<17/20>-val/$exp.
+results/trackers/<DATASET NAME>-val/$exp.
 # For the results with linear interpolation
-results/trackers/MOT<17/20>-val/${exp}_post.
+results/trackers/<DATASET NAME>-val/${exp}_post.
 ```
 
-Results are as follows:
-
-```
-# With the YOLOX MOT17 half-val ablation model
-MOT17-val       68.49
-MOT17-val-post  70.56
-# With the YOLOX MOT17 test model
-MOT20-val       53.97
-MOT20-val-post  56.84
-```
-
-To run TrackEval for HOTA, on this new results, run:
+To run TrackEval for HOTA with linear post processing MOT17, run:
 
 ```bash
 python3 external/TrackEval/scripts/run_mot_challenge.py \
   --SPLIT_TO_EVAL val \
-  --METRICS HOTA \
-  --TRACKERS_TO_EVAL $exp \
+  --METRICS HOTA Identity \
+  --TRACKERS_TO_EVAL ${exp}_post \
   --GT_FOLDER results/gt/ \
   --TRACKERS_FOLDER results/trackers/ \
-  --BENCHMARK MOT17
+  --BENCHMARK DANCE
 ```
 
-### Using the Integrated Tracker 
+Replace that last argument with MOT17 or MOT20 to evaluate those datasets.  
 
+For the highest reported ablation results, run: 
 ```
-python main.py --exp_name exp_int --post  --aw_off --new_kf_off  --w_assoc_emb 0.75
+exp=best_paper_ablations
+python3 main.py --exp_name $exp --post --grid_off --new_kf_off --dataset mot17 --w_assoc_emb 0.75 --aw_param 0.5
+python3 main.py --exp_name $exp --post --grid_off --new_kf_off --dataset mot20 --track_thresh 0.4 --w_assoc_emb 0.75 --aw_param 0.5
+python3 main.py --exp_name $exp --post --grid_off --new_kf_off --dataset dance --aspect_ratio_thresh 1000 --w_assoc_emb 1.25 --aw_param 1
 ```
 
-Integrated Results
+and re-run the TrackEval script given above. 
 
-```
-MOT-17 val - HOTA 69.93
-```
+You can achieve higher results on individual datasets with different parameters, but we kept them fairly consistent with round 
+numbers to avoid over-tuning.
 
 ### Contributing
 

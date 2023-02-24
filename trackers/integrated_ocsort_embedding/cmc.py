@@ -13,9 +13,9 @@ class CMCComputer:
         os.makedirs("./cache", exist_ok=True)
         self.cache_path = "./cache/affine_ocsort.pkl"
         self.cache = {}
-        if os.path.exists(self.cache_path):
-            with open(self.cache_path, "rb") as fp:
-                self.cache = pickle.load(fp)
+        # if os.path.exists(self.cache_path):
+        #    with open(self.cache_path, "rb") as fp:
+        #        self.cache = pickle.load(fp)
         self.minimum_features = minimum_features
         self.prev_img = None
         self.prev_desc = None
@@ -40,6 +40,12 @@ class CMCComputer:
             self.file_affines = {}
             # Maps from tag name to file name
             self.file_names = {}
+
+            # DanceTrack
+            for f_name in os.listdir("./cache/cmc_files/DanceTrack/"):
+                tag = f_name.replace("GMC-", "").replace(".txt", "").replace("-", "")
+                f_name = os.path.join("./cache/cmc_files/DanceTrack/", f_name)
+                self.file_names[tag] = f_name
 
             # All the ablation file names
             for f_name in os.listdir("./cache/cmc_files/MOT17_ablation/"):
@@ -166,5 +172,6 @@ class CMCComputer:
         self.file_affines[name] = affines
 
     def dump_cache(self):
+        return
         with open(self.cache_path, "wb") as fp:
             pickle.dump(self.cache, fp)

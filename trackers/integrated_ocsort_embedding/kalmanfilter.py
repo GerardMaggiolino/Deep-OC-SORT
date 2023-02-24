@@ -431,7 +431,6 @@ class KalmanFilterNew(object):
                 # self.attr_saved["last_measurement"][2] *= scale
 
     def unfreeze(self, new_kf):
-        # TODO: new KF filter
         if self.attr_saved is not None:
             new_history = deepcopy(self.history_obs)
             self.__dict__ = self.attr_saved
@@ -581,12 +580,13 @@ class KalmanFilterNew(object):
     def md_for_measurement(self, z):
         """Mahalanobis distance for any measurement.
 
+
+        self._mahalanobis = sqrt(float(dot(dot(self.y.T, self.SI), self.y)))
+
         Should be run after a prediction() call.
         """
-        z = reshape_z(z, self.dim_z, self.x.ndim)
-        H = self.H
-        y = z - dot(H, self.x)
-        md = sqrt(float(dot(dot(y.T, self.SI), y)))
+        y = z - self.H @ self.x
+        md = float(dot(dot(y.T, self.SI), y))
         return md
 
     def predict_steadystate(self, u=0, B=None):

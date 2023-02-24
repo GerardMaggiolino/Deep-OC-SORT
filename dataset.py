@@ -8,13 +8,7 @@ from pycocotools.coco import COCO
 from torchvision import transforms
 
 
-def get_mot_loader(
-    dataset,
-    test,
-    data_dir="data",
-    workers=4,
-    size=(800, 1440)
-):
+def get_mot_loader(dataset, test, data_dir="data", workers=4, size=(800, 1440)):
     # Different dataset paths
     if dataset == "mot17":
         direc = "mot"
@@ -49,7 +43,10 @@ def get_mot_loader(
         json_file=annotation,
         img_size=size,
         name=name,
-        preproc=ValTransform(rgb_means=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225),)
+        preproc=ValTransform(
+            rgb_means=(0.485, 0.456, 0.406),
+            std=(0.229, 0.224, 0.225),
+        )
         ## preproc=ValTransform(rgb_means=(0.0, 0.0, 0.0), std=(1.0, 1, 1.0),)
     )
 
@@ -71,7 +68,12 @@ class MOTDataset(torch.utils.data.Dataset):
     """
 
     def __init__(
-        self, data_dir, json_file="train_half.json", name="train", img_size=(608, 1088), preproc=None,
+        self,
+        data_dir,
+        json_file="train_half.json",
+        name="train",
+        img_size=(608, 1088),
+        preproc=None,
     ):
         """
         COCO dataset initialization. Annotation data are read into memory by COCO API.
@@ -212,7 +214,11 @@ def preproc(image, input_size, mean, std, swap=(2, 0, 1)):
         padded_img = np.ones(input_size) * 114.0
     img = np.array(image)
     r = min(input_size[0] / img.shape[0], input_size[1] / img.shape[1])
-    resized_img = cv2.resize(img, (int(img.shape[1] * r), int(img.shape[0] * r)), interpolation=cv2.INTER_LINEAR,).astype(np.float32)
+    resized_img = cv2.resize(
+        img,
+        (int(img.shape[1] * r), int(img.shape[0] * r)),
+        interpolation=cv2.INTER_LINEAR,
+    ).astype(np.float32)
     padded_img[: int(img.shape[0] * r), : int(img.shape[1] * r)] = resized_img
 
     padded_img = padded_img[:, :, ::-1]

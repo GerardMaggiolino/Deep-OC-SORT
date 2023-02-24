@@ -14,7 +14,7 @@ from external.adaptors.fastreid_adaptor import FastReID
 
 
 class EmbeddingComputer:
-    def __init__(self, dataset, test_dataset, grid_off, max_batch=64):
+    def __init__(self, dataset, test_dataset, grid_off, max_batch=1024):
         self.model = None
         self.dataset = dataset
         self.test_dataset = test_dataset
@@ -66,13 +66,9 @@ class EmbeddingComputer:
         # breakpoint()
         for ix, patch_coords in enumerate(split_boxes):
             if isinstance(image, np.ndarray):
-                im1 = image[
-                    patch_coords[1] : patch_coords[3],
-                    patch_coords[0] : patch_coords[2],
-                    :
-                ]
+                im1 = image[patch_coords[1] : patch_coords[3], patch_coords[0] : patch_coords[2], :]
 
-                if viz: ## TODO - change it from torch tensor to numpy array
+                if viz:  ## TODO - change it from torch tensor to numpy array
                     dirs = "./viz/{}/{}".format(tag.split(":")[0], tag.split(":")[1])
                     Path(dirs).mkdir(parents=True, exist_ok=True)
                     cv2.imwrite(
@@ -86,12 +82,12 @@ class EmbeddingComputer:
                 # print("test ", patch.shape)
                 patches.append(patch)
             else:
-                im1 = image[:, :, patch_coords[1]: patch_coords[3], patch_coords[0]: patch_coords[2]]
+                im1 = image[:, :, patch_coords[1] : patch_coords[3], patch_coords[0] : patch_coords[2]]
                 patch = torchvision.transforms.functional.resize(im1, (256, 128))
                 patches.append(patch)
 
         patches = torch.cat(patches, dim=0)
-       
+
         # print("Patches shape ", patches.shape)
         # patches = np.array(patches)
         # print("ALL SPLIT PATCHES SHAPE - ", patches.shape)
@@ -127,7 +123,7 @@ class EmbeddingComputer:
 
             crops = []
             for p in results:
-                crop = img[p[1]:p[3], p[0]:p[2]]
+                crop = img[p[1] : p[3], p[0] : p[2]]
                 crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
                 crop = cv2.resize(crop, self.crop_size, interpolation=cv2.INTER_LINEAR).astype(np.float32)
                 if self.normalize:
@@ -147,7 +143,7 @@ class EmbeddingComputer:
         # Create embeddings and l2 normalize them
         embs = []
         for idx in range(0, len(crops), self.max_batch):
-            batch_crops = crops[idx:idx + self.max_batch]
+            batch_crops = crops[idx : idx + self.max_batch]
             batch_crops = batch_crops.cuda()
             with torch.no_grad():
                 batch_embs = self.model(batch_crops)
@@ -174,7 +170,7 @@ class EmbeddingComputer:
             else:
                 return self._get_general_model()
         elif self.dataset == "dance":
-            raise RuntimeError("Need the path for a new ReID model.")
+            path = "external/weights/dance_sbs_S50_a.pth"
         else:
             raise RuntimeError("Need the path for a new ReID model.")
 
@@ -204,7 +200,6 @@ class EmbeddingComputer:
         self.model = model
         self.crop_size = (128, 256)
         self.normalize = True
-
 
     def dump_cache(self):
         if self.cache_name:
