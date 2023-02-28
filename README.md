@@ -107,8 +107,10 @@ numbers to avoid over-tuning.
 ### Contributing
 
 Formatted with `black --line-length=120 --exclude external .`
+
 # Citation
-If you find our work useful, please cite our paper
+
+If you find our work useful, please cite our paper: 
 ```
 @article{maggiolino2023deep,
     title={Deep OC-SORT: Multi-Pedestrian Tracking by Adaptive Re-Identification}, 
@@ -118,7 +120,7 @@ If you find our work useful, please cite our paper
 }
 ```
 
-and also OC-SOR, based on which we build this work:
+Also see OC-SORT, which we base our work upon: 
 ```
 @article{cao2022observation,
   title={Observation-centric sort: Rethinking sort for robust multi-object tracking},
