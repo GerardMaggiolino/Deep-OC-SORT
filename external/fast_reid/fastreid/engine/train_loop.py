@@ -132,6 +132,8 @@ class TrainerBase:
         """
         logger = logging.getLogger(__name__)
         logger.info("Starting training from epoch {}".format(start_epoch))
+        print("NUMBER OF ITERS PER EPOCH")
+        print(iters_per_epoch)
 
         self.iter = self.start_iter = start_epoch * iters_per_epoch
 

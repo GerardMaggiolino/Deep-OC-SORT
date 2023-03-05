@@ -383,7 +383,6 @@ class OCSort(object):
         remain_inds = scores > self.det_thresh
         dets = dets[remain_inds]
 
-
         # Rescale
         scale = min(img_tensor.shape[2] / img_numpy.shape[0], img_tensor.shape[3] / img_numpy.shape[1])
         dets[:, :4] /= scale

@@ -43,7 +43,6 @@ def make_parser():
 
 
 def main(args):
-
     # Create folder for outputs
     save_path = os.path.join(args.save_path, str(args.dataset) + '-ReID')
     os.makedirs(save_path, exist_ok=True)

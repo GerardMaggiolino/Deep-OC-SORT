@@ -60,7 +60,7 @@ class EmbeddingComputer:
         crops = []
         for p in results:
             if is_numpy:
-                crop = img[p[1]:p[3], p[0]:p[2]]
+                crop = img[p[1] : p[3], p[0] : p[2]]
                 crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
                 crop = cv2.resize(crop, self.crop_size, interpolation=cv2.INTER_LINEAR)
                 crop = torch.as_tensor(crop.astype("float32").transpose(2, 0, 1))
