@@ -1,4 +1,3 @@
-import pdb
 from collections import OrderedDict
 from pathlib import Path
 import os
@@ -170,7 +169,7 @@ class EmbeddingComputer:
             else:
                 return self._get_general_model()
         elif self.dataset == "dance":
-            path = "external/weights/dance_sbs_S50_a.pth"
+            path = "external/weights/dance_sbs_S50.pth"
         else:
             raise RuntimeError("Need the path for a new ReID model.")
 

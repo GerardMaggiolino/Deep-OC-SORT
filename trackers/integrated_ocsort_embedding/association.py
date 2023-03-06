@@ -1,8 +1,4 @@
-import os
-import pdb
-
 import numpy as np
-from scipy.special import softmax
 import scipy.spatial as sp
 
 
@@ -319,7 +315,6 @@ def associate(
     aw_param,
     emb_off,
     grid_off,
-    obj_trackers,
 ):
     if len(trackers) == 0:
         return (

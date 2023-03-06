@@ -6,7 +6,6 @@ import torch.nn as nn
 
 from yolox.models import YOLOPAFPN, YOLOX, YOLOXHead
 from yolox.utils import postprocess, fuse_model
-from yolox.models.network_blocks import BaseConv
 
 
 class PostModel(nn.Module):

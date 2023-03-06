@@ -2,36 +2,29 @@
 
 [ArXiv submission.](https://arxiv.org/abs/2302.11813)
 
-### NOTE FROM THE AUTHOR 
-
-The repo isn't in a clean state at the moment, and the installation below could be broken. However, I'm now 
-working full time at Tesla Autopilot and don't have a ton of free time to make QOL changes here. I'll update this 
-ASAP.
-
-Please try to install the YOLOX model and requirements. Below are the basic commands to run the validation datasets 
-and verify the results in the paper. If something is broken after you've installed requirements, raise an issue. If you want to 
-help, some order of importance tasks are: 
-
-- *Streamlining the installation process, removing submodules and just going to flat folders.*
-- Making the Kalman filter significantly less ugly and batched. 
-- Removing unused functions, excess code.  
-
 ### Installation
 
-After cloning, run:
-`git submodule update --init` to pull external dependencies (detectors, benchmark evaluators).
+Tested with Python3.8 on Ubuntu 18.04. More versions will likely work.
 
-*NOTE:* We'll move away from submodules ASAP. Having the folders here for you should be easier.  
+After cloning, install external dependencies: 
+```
+cd external/YOLOX/
+pip install -r requirements.txt && python setup.py develop
+cd ../external/deep-person-reid/
+pip install -r requirements.txt && python setup.py develop
+cd ../external/fast_reid/
+pip install -r docs/requirements.txt
+```
 
-Follow YOLOX installation instructions in its subdirectory.
+OCSORT dependencies are included in the external dependencies. If you're unable to install `faiss-gpu` needed by `fast_reid`, 
+`faiss-cpu` should be adequate. Check the external READMEs for any installation issues.
 
-Add [the weights](https://drive.google.com/file/d/1iqhM-6V_r1FpOlOzrdP_Ejshgk0DxOob/view) to the `external/weights` directory.
-
-Then, install requirements with Python 3.8 and `pip install -r requirements.txt`.
+Add [the weights](https://drive.google.com/drive/folders/1cCOx_fadIOmeU4XRrHgQ_B5D7tEwJOPx?usp=sharing) to the 
+`external/weights` directory (do NOT untar the `.pth.tar` YOLOX files).
 
 ### Data
 
-Place MOT17/20 under:
+Place MOT17/20 and DanceTrack under:
 
 ```
 data
@@ -63,9 +56,9 @@ For the baseline, MOT17/20:
 
 ```
 # Flags to disable all the new changes
-python3 main.py --exp_name $exp --post --emb_off --grid_off --cmc_off --aw_off --new_kf_off --dataset mot17
-python3 main.py --exp_name $exp --post --emb_off --grid_off --cmc_off --aw_off --new_kf_off --dataset mot20 --track_thresh 0.4
-python3 main.py --exp_name $exp --post --emb_off --grid_off --cmc_off --aw_off --new_kf_off --dataset dance --aspect_ratio_thresh 1000
+python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --grid_off --dataset mot17
+python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off ---grid_off -dataset mot20 --track_thresh 0.4
+python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --grid_off --dataset dance --aspect_ratio_thresh 1000
 ```
 
 This will create results at:
@@ -73,11 +66,11 @@ This will create results at:
 ```
 # For the standard results
 results/trackers/<DATASET NAME>-val/$exp.
-# For the results with linear interpolation
+# For the results with post-processing linear interpolation
 results/trackers/<DATASET NAME>-val/${exp}_post.
 ```
 
-To run TrackEval for HOTA with linear post processing MOT17, run:
+To run TrackEval for HOTA and Identity with linear post-processing on MOT17, run:
 
 ```bash
 python3 external/TrackEval/scripts/run_mot_challenge.py \
@@ -86,10 +79,10 @@ python3 external/TrackEval/scripts/run_mot_challenge.py \
   --TRACKERS_TO_EVAL ${exp}_post \
   --GT_FOLDER results/gt/ \
   --TRACKERS_FOLDER results/trackers/ \
-  --BENCHMARK DANCE
+  --BENCHMARK MOT17
 ```
 
-Replace that last argument with MOT17 or MOT20 to evaluate those datasets.  
+Replace that last argument with MOT17 / MOT20 / DANCE to evaluate those datasets.  
 
 For the highest reported ablation results, run: 
 ```

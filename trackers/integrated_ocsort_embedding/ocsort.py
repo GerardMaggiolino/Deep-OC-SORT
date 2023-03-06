@@ -458,7 +458,6 @@ class OCSort(object):
             self.aw_param,
             self.embedding_off,
             self.grid_off,
-            self.trackers,
         )
         for m in matched:
             self.trackers[m[1]].update(dets[m[0], :])
