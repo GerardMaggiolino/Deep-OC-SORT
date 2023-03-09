@@ -1,8 +1,29 @@
 # Deep-OC-SORT
 
-[ArXiv submission.](https://arxiv.org/abs/2302.11813)
+[![arXiv](https://img.shields.io/badge/arXiv-2302.11813-<COLOR>.svg)](https://arxiv.org/abs/2302.11813) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) ![test](https://img.shields.io/static/v1?label=By&message=Pytorch&color=red)
 
-### Installation
+
+### Deep OC-SORT: Multi-Pedestrian Tracking by Adaptive Re-Identification [[arxiv]](https://arxiv.org/abs/2302.11813)
+Gerard Maggiolino*, Adnan Ahmad*, Jinkun Cao, Kris Kitani (*=equal contribution)
+
+<center>
+<img src="pipeline.png" width="600"/>
+</center>
+
+
+| Dataset          | HOTA | AssA | IDF1 | MOTA  | IDs   | Frag   |
+| ---------------- | ---- | ---- | ---- | ---- | ----- | ---- |
+| MOT17 | 64.9 | 65.9 | 80.6 | 79.4 | 1,950 | 2,040  |
+| MOT20 | 63.9 | 65.9 | 79.2 | 75.6 | 779  | 1,536  |
+
+| Dataset          | HOTA | AssA | DetA | MOTA  | IDF1   |
+| ---------------- | ---- | ---- | ---- | ---- | ----- | 
+| DanceTrack | 61.3 | 45.8 | 82.2 | 92.3| 61.5 | 
+
+* As of Mar 9, 2023, Deep-OC-SORT ranks 1st compared to published methods on MOT17 and MOT20 w.r.t HOA. It improves tracking performance on DanceTrack over [OC-SORT](https://github.com/noahcao/OC_SORT) by ~6 HOTA.
+
+
+## Installation
 
 Tested with Python3.8 on Ubuntu 18.04. More versions will likely work.
 
@@ -22,7 +43,7 @@ OCSORT dependencies are included in the external dependencies. If you're unable 
 Add [the weights](https://drive.google.com/drive/folders/1cCOx_fadIOmeU4XRrHgQ_B5D7tEwJOPx?usp=sharing) to the 
 `external/weights` directory (do NOT untar the `.pth.tar` YOLOX files).
 
-### Data
+## Data
 
 Place MOT17/20 and DanceTrack under:
 
@@ -48,7 +69,7 @@ python3 data/tools/convert_mot20_to_coco.py
 python3 data/tools/convert_dance_to_coco.py
 ```
 
-### Evaluation
+## Evaluation
 
 Set `exp=baseline`
 
@@ -97,7 +118,7 @@ and re-run the TrackEval script given above.
 You can achieve higher results on individual datasets with different parameters, but we kept them fairly consistent with round 
 numbers to avoid over-tuning.
 
-### Contributing
+## Contributing
 
 Formatted with `black --line-length=120 --exclude external .`
 
