@@ -20,7 +20,7 @@ Gerard Maggiolino*, Adnan Ahmad*, Jinkun Cao, Kris Kitani (*=equal contribution)
 | ---------------- | ---- | ---- | ---- | ---- | ----- | 
 | DanceTrack | 61.3 | 45.8 | 82.2 | 92.3| 61.5 | 
 
-* As of Mar 9, 2023, Deep-OC-SORT ranks 1st compared to published methods on MOT17 and MOT20 w.r.t HOA. It improves tracking performance on DanceTrack over [OC-SORT](https://github.com/noahcao/OC_SORT) by ~6 HOTA.
+* As of Mar 9, 2023, Deep-OC-SORT ranks 1st compared to published methods on MOT17 and MOT20 w.r.t HOTA. It improves tracking performance on DanceTrack over [OC-SORT](https://github.com/noahcao/OC_SORT) by ~6 HOTA.
 
 
 ## Installation
