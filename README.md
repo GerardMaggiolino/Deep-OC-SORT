@@ -20,8 +20,7 @@ Gerard Maggiolino*, Adnan Ahmad*, Jinkun Cao, Kris Kitani (*=equal contribution)
 | ---------------- | ---- | ---- | ---- | ---- | ----- | 
 | DanceTrack | 61.3 | 45.8 | 82.2 | 92.3| 61.5 | 
 
-* As of Mar 9, 2023, Deep-OC-SORT ranks 1st compared to published methods on MOT17 and MOT20 w.r.t HOTA. It improves tracking performance on DanceTrack over [OC-SORT](https://github.com/noahcao/OC_SORT) by ~6 HOTA.
-
+* As of Mar 9th, 2023, Deep-OC-SORT ranks 1st compared to published methods on MOT17 and MOT20 w.r.t. HOTA. It improves tracking performance on DanceTrack over [OC-SORT](https://github.com/noahcao/OC_SORT) by ~6 HOTA.
 
 ## Installation
 
@@ -71,18 +70,18 @@ python3 data/tools/convert_dance_to_coco.py
 
 ## Evaluation
 
-Set `exp=baseline`
 
-For the baseline, MOT17/20:
+For the MOT17/20 and DanceTrack baseline:
 
 ```
+exp=baseline
 # Flags to disable all the new changes
 python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --grid_off --dataset mot17
 python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off ---grid_off -dataset mot20 --track_thresh 0.4
 python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --grid_off --dataset dance --aspect_ratio_thresh 1000
 ```
 
-This will create results at:
+This will cache detections under ./cache, speeding up future runs. This will create results at:
 
 ```
 # For the standard results
@@ -113,7 +112,8 @@ python3 main.py --exp_name $exp --post --grid_off --new_kf_off --dataset mot20 -
 python3 main.py --exp_name $exp --post --grid_off --new_kf_off --dataset dance --aspect_ratio_thresh 1000 --w_assoc_emb 1.25 --aw_param 1
 ```
 
-and re-run the TrackEval script given above. 
+This will cache generated embeddings under ./cache/embeddings, speeding up future runs. Re-run the TrackEval script provided 
+above.
 
 You can achieve higher results on individual datasets with different parameters, but we kept them fairly consistent with round 
 numbers to avoid over-tuning.
