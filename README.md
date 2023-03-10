@@ -77,7 +77,7 @@ For the MOT17/20 and DanceTrack baseline:
 exp=baseline
 # Flags to disable all the new changes
 python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --grid_off --dataset mot17
-python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off ---grid_off -dataset mot20 --track_thresh 0.4
+python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --grid_off -dataset mot20 --track_thresh 0.4
 python3 main.py --exp_name $exp --post --emb_off --cmc_off --aw_off --new_kf_off --grid_off --dataset dance --aspect_ratio_thresh 1000
 ```
 
